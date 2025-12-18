@@ -74,3 +74,14 @@ The archive system provides several benefits:
 - **Workspace Organization**: Active plans remain easily accessible while completed work doesn't clutter the workspace
 - **Historical Reference**: Completed plans and their tasks remain available for future reference or learning
 - **Automatic Management**: No manual intervention required - archival happens automatically upon successful completion
+
+## Tech Stack and Frameworks
+
+* Written in golang.
+* Stores significant decisions as Architecture Decision Records in `docs/adrs`.
+* Supports multiple database backends, defaulting to SQLite but supporting MySQL / mariadb and Postgres.
+* Uses JSON:API for APIs.
+* Uses goroutines where appropriate to improve concurrent performance.
+* Is API only and does not have a web interface.
+* Hosted on GitHub and uses GitHub Actions.
+* Uses release-please for automated releases.

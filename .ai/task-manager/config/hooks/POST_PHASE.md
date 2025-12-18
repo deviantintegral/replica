@@ -22,3 +22,11 @@ Valid status transitions:
 - `in-progress` → `failed` (execution error)
 - `failed` → `in-progress` (retry attempt)
 
+# Linting Requirements
+
+* Uses conventional commits.
+* Uses pre-commit to validate golang tests (`go test`) and commit messages.
+* Writes documentation as Markdown files in `docs`, with URL friendly file names in lower case and with dashes, not underscores.
+* Checks code for common security issues as described by the OWASP Top 10.
+
+If any checks fail, fix the issues and rerun the validation. Do not proceed until all checks pass.
