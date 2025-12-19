@@ -62,6 +62,14 @@ created: 2025-12-18
 | Instance bootstrap? | CLI init command creates admin user and optional starter content types |
 | Starter content types? | Optional templates (Article, Page, Media) available via CLI init |
 | Mutation testing framework? | gremlins for mutation testing |
+| Extension model? | HTTP webhook-based; subscribers can intercept and modify content during CRUD operations |
+| Webhook priority? | Subscribers specify advisory priority: EARLY, NEUTRAL, or LATE for call ordering |
+| Webhook subscription management? | API only; subscriptions created and managed via REST endpoints |
+| Webhook failure handling? | Configurable per-subscriber: 'required' (abort on fail) or 'optional' (skip on fail) |
+| CLI authentication? | Login flow; CLI has 'login' command that stores JWT token locally |
+| Peer instance configuration? | API registration; peers registered via API with URL, name, and credentials |
+| Background job processing? | Database queue; jobs stored in database, any instance can pick up work |
+| Content caching? | In-memory cache per instance; not shared between instances |
 
 ## Executive Summary
 
@@ -322,6 +330,12 @@ The CLI tool provides administrative operations:
 - Content pruning operations
 - Health and status checks
 
+**Authentication:**
+- **Login Command**: `replica login` authenticates with username/password and stores JWT token locally
+- **Token Storage**: JWT stored in user's config directory (~/.config/replica or platform equivalent)
+- **Token Refresh**: Automatic refresh when token approaches expiration
+- **Logout**: `replica logout` removes stored credentials
+
 Commands output structured data (JSON) for scripting integration while providing human-readable formatting for interactive use.
 
 ### Observability Stack
@@ -391,17 +405,105 @@ Each instance maintains:
 
 This allows operators to use meaningful names while maintaining stable UUIDs for distributed system coordination.
 
-### Webhook System
-**Objective**: Enable external integrations through event-driven notifications
+### Peer Registration
+**Objective**: Enable federation between Replica instances
 
-Webhooks notify external systems of content and sync events:
+Peer instances are registered via API:
 
-- **Event Types**: Content created/updated/deleted, workflow transitions, sync completed, conflicts detected
-- **Configurable Endpoints**: Multiple webhook endpoints per event type
-- **Retry Logic**: Failed deliveries retry with exponential backoff
+- **Registration Endpoint**: POST to register new peer with URL, friendly name, and credentials
+- **Credential Types**: API key or OAuth client credentials for the remote instance
+- **Health Verification**: Optional connectivity check during registration
+- **Sync Permissions**: Configure which content types can sync with this peer, and in which direction
+- **Peer Management**: List, update, disable, or remove peers via API
+
+Peers are stored in the database and available to all instances in a multi-instance deployment.
+
+### Background Job Queue
+**Objective**: Process asynchronous tasks reliably across multiple instances
+
+Jobs are queued in the database for distributed processing:
+
+- **Database-Backed Queue**: Jobs stored as database records; survives instance restarts
+- **Worker Polling**: Instances poll for available jobs with distributed locking
+- **Job Types**: Scheduled publishing, webhook delivery, asset transformation, pruning
+- **Retry Logic**: Failed jobs retry with exponential backoff; dead-letter after max attempts
+- **Distributed Locking**: Database-level locks prevent duplicate job execution
+
+This approach enables horizontal scaling without external dependencies like Redis.
+
+### Content Caching
+**Objective**: Improve read performance for frequently accessed content
+
+In-memory caching per instance:
+
+- **Cache Scope**: Per-instance cache; not shared between instances
+- **Cache Strategy**: LRU eviction with configurable size limits
+- **Invalidation**: Cache invalidated on local writes and incoming sync
+- **Cache Bypass**: API parameter to bypass cache for fresh data
+- **Metrics**: Cache hit/miss rates exposed via metrics endpoint
+
+Caching is optional and can be disabled for memory-constrained deployments.
+
+### Webhook Extension System
+**Objective**: Enable external integrations and content modification through HTTP-based extension points
+
+The webhook system serves as the primary extension model, allowing external services to intercept and modify content during CRUD operations:
+
+**Extension Model:**
+- **Interceptor Pattern**: Webhooks are called during content operations, not just after
+- **Data Modification**: Subscribers can inspect and modify content data in their response
+- **Synchronous Flow**: CRUD operations wait for webhook responses before completing
+- **Timeout Handling**: Configurable timeouts; operations proceed if subscriber is unresponsive
+
+**Event Types:**
+- **Content Events**: `content.creating`, `content.created`, `content.updating`, `content.updated`, `content.deleting`, `content.deleted`
+- **Workflow Events**: `workflow.transitioning`, `workflow.transitioned`
+- **Sync Events**: `sync.started`, `sync.completed`, `sync.conflict_detected`
+- **Schema Events**: `schema.updating`, `schema.updated`
+
+**Subscriber Priority:**
+Subscribers specify an advisory priority when registering, influencing call order:
+- **EARLY**: Called first; typically for validation, enrichment, or transformation
+- **NEUTRAL**: Called in middle; default priority for general processing
+- **LATE**: Called last; typically for logging, analytics, or final modifications
+
+Priority is advisory; the system orders subscribers by priority but doesn't guarantee strict ordering within the same priority level.
+
+**Webhook Configuration:**
+- **API Management**: Subscriptions created, updated, deleted via REST endpoints
+- **Multiple Endpoints**: Multiple subscribers per event type
+- **Selective Subscription**: Subscribe to specific content types or all content
+- **Failure Mode**: Per-subscriber setting - `required` (abort operation on failure) or `optional` (skip and continue)
 - **Payload Signing**: HMAC signatures for webhook authenticity verification
+- **Retry Logic**: Failed deliveries retry with exponential backoff (for notification-only events)
 
-Webhooks fire asynchronously to avoid blocking content operations.
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant R as Replica
+    participant E as EARLY Subscriber
+    participant N as NEUTRAL Subscriber
+    participant L as LATE Subscriber
+
+    C->>R: Create Content
+    R->>E: content.creating (with data)
+    E->>R: Modified data (or unchanged)
+    R->>N: content.creating (with data)
+    N->>R: Modified data (or unchanged)
+    R->>L: content.creating (with data)
+    L->>R: Modified data (or unchanged)
+    R->>R: Persist final content
+    R-->>E: content.created (notification)
+    R-->>N: content.created (notification)
+    R-->>L: content.created (notification)
+    R->>C: Response
+```
+
+**Response Contract:**
+- Subscribers return modified content in response body to alter the operation
+- Return unchanged content or empty response to pass through
+- Return error status to abort the operation (for `.creating`, `.updating`, `.deleting` events)
+- Post-operation events (`.created`, `.updated`, `.deleted`) are notification-only and fire asynchronously
 
 ### Multilingual Content
 **Objective**: Support content translation through linked content items
@@ -617,6 +719,9 @@ Test infrastructure:
 
 - **Large sync performance**: Full history sync of large content sets could overwhelm resources
     - **Mitigation**: Chunked transfers with resume capability. Configurable history depth limits. Delta sync minimizes transferred data.
+
+- **Webhook extension latency**: Synchronous webhook calls during CRUD operations add latency
+    - **Mitigation**: Configurable timeouts per subscriber. Circuit breaker pattern for unresponsive subscribers. Option to mark subscribers as non-blocking (notification-only).
 </details>
 
 <details>
@@ -664,7 +769,7 @@ Test infrastructure:
 7. **Dependency Sync**: Syncing a content item automatically includes all referenced items, handling circular references correctly
 8. **Full-Text Search**: Content is searchable using database-native full-text capabilities across all three database backends
 9. **Scheduled Publishing**: Content scheduled for future publication transitions automatically at the specified time
-10. **Webhooks**: External systems receive notifications for configured content and sync events
+10. **Webhook Extensions**: External subscribers can intercept content CRUD operations and modify data; priority ordering (EARLY/NEUTRAL/LATE) is respected
 11. **Translations**: Content items can be linked as translations; fetching content can include or follow translation links
 12. **Audit Trail**: All content modifications, sync operations, and permission changes are recorded in immutable audit log
 13. **Sync Idempotency**: Retrying a failed sync operation produces consistent results; partial syncs don't create invalid states
@@ -720,3 +825,7 @@ Replica operates as a standalone service exposing JSON:API endpoints. Integratio
 
 - **2025-12-18**: Initial plan creation with 38 clarifications
 - **2025-12-18**: Plan refinement - added 7 new clarifications (MVP scope, local auth, testing, bootstrap, starter types, mutation testing), added Instance Bootstrap, Local User Management, and Testing Strategy architectural sections
+- **2025-12-18**: Extended Webhook System to full extension model - webhooks can now intercept and modify content during CRUD operations with EARLY/NEUTRAL/LATE priority ordering; added sequence diagram for extension flow
+- **2025-12-18**: Added webhook subscription management (API only), configurable failure handling (required/optional), and CLI login flow authentication
+- **2025-12-18**: Added Peer Registration, Background Job Queue, and Content Caching architectural sections
+- **2025-12-19**: Plan refinement review completed - no additional clarifications needed; plan confirmed ready for task generation with 53 clarifications and 38 architectural components
