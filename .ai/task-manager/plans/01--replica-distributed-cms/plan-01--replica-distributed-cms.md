@@ -56,7 +56,7 @@ created: 2025-12-18
 | API documentation? | Auto-generated OpenAPI/Swagger specification from code |
 | Content type management? | API only; content types created and modified exclusively through API |
 | Graceful shutdown? | Interrupt syncs at next safe point; rely on idempotent retry for resume |
-| MVP scope for 1.0? | All 32 architectural components are required for the core distributed CMS vision |
+| MVP scope for 1.0? | All 41 architectural components are required for the core distributed CMS vision |
 | Local user authentication? | CLI creates initial admin user; subsequent users created via API |
 | Testing strategy? | Unit tests with code coverage, functional tests for CLI, mutation testing with gremlins |
 | Instance bootstrap? | CLI init command creates admin user and optional starter content types |
@@ -124,6 +124,8 @@ created: 2025-12-18
 | Maximum request body size? | No default limit; limited only by infrastructure; operator configures if needed |
 | Object store library? | gocloud.dev/blob; portable blob storage API supporting S3, GCS, Azure, local filesystem, and in-memory (for testing) |
 | Concurrency model? | Goroutines with semaphore pattern for bounded concurrency where needed (external HTTP, object store) |
+| Asset revision tracking? | Yes; assets track which content revision added/changed them; sync only transfers assets newer than last sync point |
+| Sync state tracking? | Per-peer vector clock; store last-synced vector clock per peer (like Git's remote tracking refs); no replication IDs needed |
 
 ## Executive Summary
 
@@ -131,7 +133,7 @@ Replica is a distributed Content Management System built in Go that enables bidi
 
 The architectural approach centers on treating content and schema as versioned, UUID-identified entities that can flow between instances while maintaining integrity and traceability. Each instance operates autonomously but can federate with peers through a standardized JSON:API interface. The version branching model for conflict resolution, combined with OAuth 2.0/JWT authentication, enables both simple internal deployments and complex multi-organization federations.
 
-Key differentiators include schema version management with automatic upgrade/downgrade paths, query-based selective sync, and AI-assisted conflict resolution. The system supports multiple database backends (SQLite, MySQL/MariaDB, PostgreSQL) and delegates binary asset storage to pluggable object stores, optimizing for the performance characteristics of distributed storage systems.
+Key differentiators include schema version management with automatic upgrade/downgrade paths, query-based selective sync, and version-branching conflict resolution with manual merge (AI-assisted resolution planned for post-1.0). The system supports multiple database backends (SQLite, MySQL/MariaDB, PostgreSQL) and delegates binary asset storage to pluggable object stores, optimizing for the performance characteristics of distributed storage systems.
 
 ## Context
 
@@ -368,7 +370,16 @@ Sync operations support:
 - **Circular reference handling**: Detect reference cycles and include all items in the cycle as a single atomic batch
 - **Schema version transformation**: Content automatically transformed to match destination instance's schema version during sync
 
+**Per-Peer Sync State (Git-like model):**
+- Each peer has a stored "last synced vector clock" (like Git's `refs/remotes/origin/main`)
+- On sync, compare local vector clock with stored peer clock to identify changes
+- After successful sync, update stored peer clock to current state
+- No CouchDB-style replication IDs needed; state is per-peer, not per-filter
+- Filtered syncs use the same peer clock; filter just limits what's transferred
+
 The sync protocol transmits content metadata and revision history. Binary assets are referenced by their object store URLs; the receiving instance can fetch assets from the origin's object store or trigger replication to its own store.
+
+**Asset Sync Optimization**: Assets track their revision origin; during sync, only assets added/changed since the last sync point are transferred, avoiding redundant asset transfers.
 
 ### Federation Trust Model
 **Objective**: Enable safe content sharing between independent, potentially untrusted instances
@@ -445,6 +456,7 @@ Binary files (media, documents) are stored in object stores rather than the data
 - Asset versions are immutable; updates create new versions
 - Version history enables rollback to previous asset states
 - Pruning policies can limit retained versions by count or age
+- **Revision Origin Tracking**: Each asset records which content revision added/changed it (similar to CouchDB's `revpos`)
 
 The content database stores object store references (bucket, key, version, metadata). Asset sync between instances can operate in multiple modes:
 - Reference-only: Receiving instance accesses assets from origin's store
@@ -553,7 +565,7 @@ Content items move through configurable workflow states:
 - **Scheduled Publishing**: Content can be scheduled to transition states at specific times (e.g., publish at midnight)
 - **Sync Filtering**: Sync operations can filter by workflow state (e.g., only sync published content to production)
 
-A background scheduler processes pending state transitions, with distributed locking to prevent duplicate execution across instances.
+A background scheduler processes pending state transitions.
 
 ### Content Deletion
 **Objective**: Handle content removal with configurable retention and sync propagation
@@ -1084,3 +1096,7 @@ Replica operates as a standalone service exposing JSON:API endpoints. Integratio
 - **2025-12-19**: Added Concurrency Model architectural section documenting goroutine usage: worker pools per job type, parallel webhook delivery, parallel asset transforms, connection pooling, context cancellation; updated Background Job Queue to reference worker pools
 - **2025-12-19**: Removed hot reload for configuration; app restart required for config changes
 - **2025-12-19**: Simplified concurrency model: replaced worker pools with goroutines + semaphore pattern; semaphores only for external I/O (webhooks, object store); rely on Go scheduler for CPU multiplexing
+- **2025-12-19**: Reviewed CouchDB replication protocol; kept simpler batch sync model (no _revs_diff, no checkpoints, no continuous replication for 1.0); added asset revision tracking optimization (like CouchDB revpos) to avoid re-transferring unchanged assets
+- **2025-12-19**: Added per-peer vector clock tracking for sync state (Git-like model); no CouchDB-style replication IDs needed; each peer stores last-synced vector clock like Git's remote tracking refs
+- **2025-12-19**: Final review - corrected MVP scope count to 41 architectural components; removed erroneous distributed locking reference from Workflow section (contradicted single-writer model)
+- **2025-12-19**: Refinement review - updated Executive Summary to accurately reflect 1.0 scope (manual conflict resolution, AI-assisted deferred to post-1.0); plan confirmed ready for task generation
