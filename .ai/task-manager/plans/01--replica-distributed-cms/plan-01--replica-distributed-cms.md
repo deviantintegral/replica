@@ -14,7 +14,7 @@ created: 2025-12-18
 
 | Question | Answer |
 |----------|--------|
-| Authentication model for inter-instance communication? | Dual support: API Keys for simple setups, OAuth 2.0/JWT for federated environments |
+| Authentication model for inter-instance communication? | OAuth 2.0/JWT only; token-based authentication with expiration for all environments |
 | Content conflict resolution strategy? | Version branching with manual or AI-assisted merge resolution |
 | Content types for 1.0? | Full CMS: structured content, media, users, permissions. Binary files via pluggable object stores (S3 default, local for dev) |
 | Schema migration approval? | Auto-migrate unless data loss possible, then require explicit approval |
@@ -68,14 +68,68 @@ created: 2025-12-18
 | Webhook failure handling? | Configurable per-subscriber: 'required' (abort on fail) or 'optional' (skip on fail) |
 | CLI authentication? | Login flow; CLI has 'login' command that stores JWT token locally |
 | Peer instance configuration? | API registration; peers registered via API with URL, name, and credentials |
-| Background job processing? | Database queue; jobs stored in database, any instance can pick up work |
+| Background job processing? | Database queue; jobs stored in database; single worker per instance (no distributed locking needed) |
 | Content caching? | In-memory cache per instance; not shared between instances |
+| Schema versioning model? | Semantic versioning (MAJOR.MINOR.PATCH) for content type schemas |
+| Schema MAJOR version bump? | Breaking changes: field removal, field type changes, format changes (string to array) |
+| Schema MINOR version bump? | Non-breaking additions: new optional fields, new enum values |
+| Schema PATCH version bump? | Metadata changes, validation relaxation, default value changes, computed field bug fixes |
+| Client schema version selection? | Clients can request content in a specific schema version; content transformed to match |
+| Minimum schema version? | Admins can set minimum supported version per content type to deprecate old versions |
+| Schema version discovery? | API endpoint to list all supported schema versions with changelogs |
+| Federation trust model? | Git-like: some trust required (content quality not guaranteed), but pulling never causes irreversible data loss or executes code |
+| Cross-instance protocol? | Application-level HTTPS protocol (not database replication); each instance controls its own database |
+| Pulled content safety? | Content is data only; no executable code; all changes create new revisions (reversible) |
+| OAuth identity provider? | Built-in IdP only; Replica issues its own JWTs; no external IdP integration in 1.0 |
+| Rich text format? | Both HTML and Markdown supported; configurable per field; both sanitized appropriately |
+| License model? | AGPL-3.0; copyleft license requiring source sharing for deployed services |
+| Image processing library? | vipsgen (cshum/vipsgen); Go bindings for libvips; high performance with C dependency |
+| Computed field expressions? | CEL expressions only; same language as field validation for consistency |
+| CLI shell completions? | Yes; CLI includes 'completion' subcommand for bash, zsh, and fish |
+| Content pruning trigger? | Background job on schedule; periodic job runs pruning based on configured retention policies |
+| Sync protocol versioning? | Tied to API version; sync protocol version matches API version (/v1 API uses sync v1) |
+| Multi-instance clustering? | Single writer only; one Replica instance per database; scale via federation instead |
+| Webhook HMAC algorithm? | HMAC-SHA256; standard choice with good security/performance balance |
+| Background job retry policy? | Configurable per job type; different retry policies for webhooks, pruning, etc. |
+| Audit log export? | Webhook notifications; real-time audit events sent to configured webhook endpoints |
+| CLI config directory? | XDG compliant; ~/.config/replica on Linux; platform-appropriate on macOS/Windows |
+| Custom metadata fields? | Schema-defined only; all fields must be in schema; use JSON blob field for flexible data |
+| UUID format? | UUIDv7 (time-ordered); better for database indexing and time-based queries |
+| Password hashing algorithm? | argon2id; modern memory-hard algorithm; winner of Password Hashing Competition |
+| JSON:API sparse fieldsets? | Yes; clients can request only specific fields to reduce payload size |
+| Webhook timeout default? | 30 seconds; generous timeout for complex subscriber processing; configurable per subscriber |
+| Asset file size limit? | No default limit; limited only by infrastructure; operator configures if needed |
+| Geolocation field format? | GeoJSON Point format; standard format compatible with mapping libraries |
+| JWT signing algorithm? | RS256 (asymmetric); public key can be shared for verification; better for federation |
+| Default pagination page size? | 100 items; efficient for data-heavy clients; configurable per request |
+| Content type naming convention? | camelCase only; consistent with JSON conventions |
+| Bulk operations? | Yes; support bulk create/update/delete in single request; JSON:API extension |
+| Docker image base? | Alpine + libvips; small image size (~50MB) with image processing support |
+| Structured logging library? | zerolog; high performance; zero allocations; popular in Go community |
+| JSON:API library? | google/jsonapi; mature library for marshaling/unmarshaling JSON:API format |
+| JWT token expiration? | 1 hour access token / 30 day refresh token; configurable per instance |
+| Rate limiting algorithm? | Sliding window; accurate rate limiting; prevents bursts at window boundaries |
+| HTML sanitization library? | bluemonday; Go-native; fast; policy-based sanitization |
+| Minimum Go version? | Go 1.25+; current stable release (1.25.5 as of December 2025) |
+| Markdown rendering library? | goldmark; CommonMark compliant; extensible; most popular Go Markdown parser |
+| CLI output format default? | Human-readable by default; --json flag for JSON output (script-friendly) |
+| Sync chunk size default? | 100 items per chunk; smaller chunks for better progress tracking and reliability |
+| Graceful shutdown timeout? | 30 seconds; standard timeout for in-flight requests before forced shutdown |
+| Maximum fields per content type? | No limit; schema designer decides; performance responsibility on user |
+| Backup/restore strategy? | CLI commands `replica backup` and `replica restore` for convenience; exports database and asset metadata |
+| AI conflict resolution interface? | Defer to post-1.0; manual resolution implemented first; AI interface is future enhancement |
+| Bulk request schema versions? | Per-item meta field; header sets default, items override via `meta.schemaVersion` in payload |
+| Array field types? | Yes; fields can be arrays of basic types (string[], number[], reference[]) |
+| Date/datetime timezone handling? | Store with timezone; preserve original timezone offset with each date value |
+| Maximum request body size? | No default limit; limited only by infrastructure; operator configures if needed |
+| Object store library? | gocloud.dev/blob; portable blob storage API supporting S3, GCS, Azure, local filesystem, and in-memory (for testing) |
+| Concurrency model? | Goroutines with semaphore pattern for bounded concurrency where needed (external HTTP, object store) |
 
 ## Executive Summary
 
 Replica is a distributed Content Management System built in Go that enables bidirectional content synchronization between independent instances. The system addresses the need for flexible content distribution across environments (production-to-staging, blue-green deployments) and organizations (content distribution networks between partner sites).
 
-The architectural approach centers on treating content and schema as versioned, UUID-identified entities that can flow between instances while maintaining integrity and traceability. Each instance operates autonomously but can federate with peers through a standardized JSON:API interface. The version branching model for conflict resolution, combined with pluggable authentication (API Keys + OAuth 2.0/JWT), enables both simple internal deployments and complex multi-organization federations.
+The architectural approach centers on treating content and schema as versioned, UUID-identified entities that can flow between instances while maintaining integrity and traceability. Each instance operates autonomously but can federate with peers through a standardized JSON:API interface. The version branching model for conflict resolution, combined with OAuth 2.0/JWT authentication, enables both simple internal deployments and complex multi-organization federations.
 
 Key differentiators include schema version management with automatic upgrade/downgrade paths, query-based selective sync, and AI-assisted conflict resolution. The system supports multiple database backends (SQLite, MySQL/MariaDB, PostgreSQL) and delegates binary asset storage to pluggable object stores, optimizing for the performance characteristics of distributed storage systems.
 
@@ -113,7 +167,7 @@ graph TB
     subgraph "Replica Instance"
         API[JSON:API Server]
         CLI[CLI Tool]
-        Auth[Auth Layer<br/>API Keys + JWT]
+        Auth[Auth Layer<br/>OAuth 2.0 + JWT]
         RBAC[RBAC Service]
         QUOTA[Quota Service]
 
@@ -174,7 +228,7 @@ graph TB
 ### Core Data Model
 **Objective**: Establish UUID-based entities with comprehensive version tracking that enables distributed synchronization
 
-All entities use UUIDs as primary identifiers, enabling conflict-free creation across instances. The content model separates:
+All entities use UUIDv7 (time-ordered) as primary identifiers, enabling conflict-free creation across instances with efficient database indexing. The content model separates:
 
 - **Content Items**: The actual content data with UUID, content type reference, and field values
 - **Content Types**: Schema definitions describing fields, validation rules, and relationships
@@ -183,24 +237,47 @@ All entities use UUIDs as primary identifiers, enabling conflict-free creation a
 - **Assets**: Binary files with full version history, stored in object stores with metadata in the database
 
 **Supported Field Types:**
-- **Basic**: String, number (integer/float), boolean, date/datetime
-- **References**: Links to other content items (with referential integrity)
-- **Media**: References to versioned binary assets
-- **Rich**: Rich text (HTML/Markdown with sanitization), JSON blob (schema-validated)
-- **Specialized**: Geolocation (lat/lng with optional address), computed fields (calculated on-write, stored and indexable)
+- **Basic**: String, number (integer/float), boolean, date/datetime (stored with timezone)
+- **Arrays**: Arrays of basic types (string[], number[], boolean[], date[])
+- **References**: Links to other content items (with referential integrity); supports reference[]
+- **Media**: References to versioned binary assets; supports media[]
+- **Rich**: Rich text (configurable per field as HTML or Markdown; both sanitized appropriately), JSON blob (schema-validated)
+- **Specialized**: Geolocation (GeoJSON Point format), computed fields (CEL expressions calculated on-write, stored and indexable)
 
 Vector clocks accompany revisions to enable proper ordering and conflict detection without centralized coordination. Each instance maintains its logical clock, incremented on local modifications.
 
 ### Schema Version Management
-**Objective**: Enable content type evolution with bidirectional migration support
+**Objective**: Enable content type evolution with semantic versioning and client-selectable schema versions
 
-Content types evolve over time. Replica treats schema changes as first-class versioned entities:
+Content types evolve over time. Replica treats schema changes as first-class versioned entities using semantic versioning (MAJOR.MINOR.PATCH):
 
-- Each content type maintains a version history
+**Semantic Versioning Rules:**
+- **MAJOR** (breaking): Field removal, field type changes, format changes (e.g., string → array)
+- **MINOR** (additive): New optional fields, new enum values, new validation options
+- **PATCH** (metadata): Field descriptions, relaxed validation rules, default value changes, computed field bug fixes
+
+**Version Management:**
+- Each content type maintains a version history with all schema versions
 - Schema versions include structured migration definitions (not raw SQL)
 - Migrations specify field additions, removals, transformations, and validation changes
-- Downgrade paths enable syncing content to instances running older schema versions
-- The system auto-migrates additive changes (new optional fields) but requires approval for potentially destructive changes (field removal, type changes)
+- Upgrade and downgrade paths enable bidirectional content transformation between versions
+
+**Client Schema Version Selection:**
+- API consumers specify desired schema version via header or query parameter (e.g., `Accept: application/vnd.api+json; schema-version=1.2`)
+- Content is automatically transformed to match the requested schema version
+- Webhook subscribers can specify which schema version they want to receive
+- If no version specified, the latest version is returned
+- **Bulk requests**: Header sets default; individual items can override via `meta.schemaVersion` in payload
+
+**Minimum Supported Version:**
+- Admins can set a minimum supported schema version per content type
+- Requests for versions below the minimum return an error with upgrade guidance
+- Enables deprecation of old schema versions over time
+
+**Schema Version Discovery:**
+- `GET /content-types/{type}/versions` returns all supported schema versions
+- Each version entry includes: version number, changelog, field differences, deprecation status
+- Clients can query to understand available versions before making requests
 
 Migration definitions use a declarative format describing the transformation, enabling the system to generate appropriate SQL for each database backend.
 
@@ -210,6 +287,7 @@ Migration definitions use a declarative format describing the transformation, en
 Content types are managed exclusively through the API:
 
 - **API Operations**: Create, update, delete content types via REST endpoints
+- **Naming Convention**: Content type and field names must use camelCase (e.g., `blogPost`, `publishDate`)
 - **No Config Files**: Content types not defined in YAML; schema is data, not configuration
 - **Sync as Content**: Content type definitions sync between instances like any other content
 - **Schema Validation**: API validates content type changes; prevents invalid field configurations
@@ -218,12 +296,17 @@ Content types are managed exclusively through the API:
 This approach enables content type management through the same sync mechanisms as content itself.
 
 ### Authentication and Authorization
-**Objective**: Support both simple internal deployments and complex federated environments
+**Objective**: Provide secure, standards-based authentication for all environments
 
-Dual authentication strategy:
+OAuth 2.0/JWT authentication with built-in identity provider:
 
-- **API Keys**: Shared secrets for trusted internal networks, simple setup for development and single-organization deployments
-- **OAuth 2.0 / JWT**: Token-based authentication with expiration for federated environments, supporting instance-to-instance authorization with scoped permissions
+- **Built-in IdP**: Replica issues its own JWTs; no external IdP integration in 1.0
+- **JWT Signing**: RS256 (asymmetric); public key can be shared for token verification across instances
+- **Token-Based Auth**: All authentication uses JWT tokens (1-hour access, 30-day refresh by default; configurable)
+- **OAuth 2.0 Flows**: Support for client credentials (service-to-service) and authorization code (user authentication) flows
+- **Scoped Permissions**: Tokens carry permission scopes for fine-grained access control
+- **Token Refresh**: Refresh tokens enable long-lived sessions without storing credentials
+- **Instance-to-Instance**: Peer instances authenticate using OAuth client credentials
 
 Authorization operates at multiple levels:
 - Instance-level: Which remote instances can connect
@@ -247,10 +330,10 @@ This separation allows organizations to maintain consistent role definitions acr
 
 The quota system enforces limits at multiple levels:
 
-- **API Rate Limits**: Per-client request limits to prevent abuse
+- **API Rate Limits**: Per-client request limits using sliding window algorithm to prevent abuse
 - **Storage Quotas**: Limits on content items, revisions, and asset storage per user or instance
 - **Sync Quotas**: Limits on sync operation frequency and data volume
-- **Enforcement**: Requests exceeding quotas receive appropriate HTTP status codes with retry guidance
+- **Enforcement**: Requests exceeding quotas receive HTTP 429 with Retry-After header
 
 ### Sync Engine
 **Objective**: Enable efficient bidirectional content synchronization with conflict detection
@@ -279,12 +362,58 @@ sequenceDiagram
 Sync operations support:
 - **Query-based selection**: Filter by content type, individual UUIDs, tags, date ranges, or custom queries
 - **Delta sync**: Only transfer content modified since last synchronization
-- **Chunked transfer**: Large sync operations broken into resumable chunks
+- **Chunked transfer**: Large sync operations broken into resumable chunks (100 items per chunk by default)
 - **Bidirectional flow**: Both push and pull supported between any connected instances
 - **Dependency resolution**: Automatically include referenced content items in sync operations
 - **Circular reference handling**: Detect reference cycles and include all items in the cycle as a single atomic batch
+- **Schema version transformation**: Content automatically transformed to match destination instance's schema version during sync
 
 The sync protocol transmits content metadata and revision history. Binary assets are referenced by their object store URLs; the receiving instance can fetch assets from the origin's object store or trigger replication to its own store.
+
+### Federation Trust Model
+**Objective**: Enable safe content sharing between independent, potentially untrusted instances
+
+Replica follows a **Git-like federation model** where sync occurs at the application level, not the database level:
+
+```
+Instance A (Publisher)                 Instance B (Consumer)
+┌─────────────────────┐               ┌─────────────────────┐
+│    Replica API      │◄── HTTPS ────►│    Replica API      │
+│  (Controls access)  │  (Your sync   │  (Validates input)  │
+└──────────┬──────────┘   protocol)   └──────────┬──────────┘
+           │                                     │
+           ▼                                     ▼
+┌─────────────────────┐               ┌─────────────────────┐
+│      Database       │               │      Database       │
+│   (Not exposed)     │               │   (Not exposed)     │
+└─────────────────────┘               └─────────────────────┘
+```
+
+**Trust Assumptions (Like Git):**
+- Pulling content from a remote instance requires some trust in the content quality
+- Remote content may be poorly written, outdated, or inappropriate
+- The receiving instance decides what to pull and can reject or filter content
+- Content authorship and origin are tracked for accountability
+
+**Safety Guarantees (Unlike Arbitrary Code):**
+- **No code execution**: Pulled content is pure data; no executable code, templates, or scripts
+- **Reversible changes**: All incoming content creates new revisions; nothing is overwritten destructively
+- **No data loss**: Existing local content is preserved; conflicts create branches, not overwrites
+- **Schema validation**: Incoming content must validate against local schema before acceptance
+- **Sandboxed fields**: Rich text and JSON fields are sanitized; no script injection
+
+**What Can Go Wrong (Accepted Risks):**
+- Pulling low-quality or incorrect content (user's judgment required)
+- Storage consumption from large syncs (quotas can limit)
+- Conflicts requiring manual resolution (expected behavior)
+
+**What Cannot Happen:**
+- Remote instance cannot execute code on local instance
+- Remote instance cannot delete local content without creating tombstone
+- Remote instance cannot bypass local RBAC or validation
+- Sync cannot cause unrecoverable data loss
+
+This model ensures that federation remains safe even when syncing with instances controlled by other organizations.
 
 ### Conflict Resolution
 **Objective**: Handle concurrent modifications across distributed instances gracefully
@@ -303,10 +432,13 @@ Resolved conflicts create a new revision with both branches as parents, preservi
 ### Object Store Integration
 **Objective**: Handle binary assets efficiently with pluggable storage backends and full version history
 
-Binary files (media, documents) are stored in object stores rather than the database:
+Binary files (media, documents) are stored in object stores rather than the database, using **gocloud.dev/blob** for portable storage abstraction:
 
-- **S3-compatible**: Default production backend supporting AWS S3, MinIO, and compatible services
-- **Local filesystem**: Development and testing backend
+- **AWS S3**: Production backend via `s3://bucket-name` URL scheme
+- **Google Cloud Storage**: Production backend via `gs://bucket-name` URL scheme
+- **Azure Blob Storage**: Production backend via `azblob://container` URL scheme
+- **Local filesystem**: Development backend via `file:///path` URL scheme
+- **In-memory**: Testing backend via `mem://` URL scheme (no external dependencies)
 
 **Asset Versioning:**
 - Each asset maintains full version history similar to content items
@@ -332,11 +464,18 @@ The CLI tool provides administrative operations:
 
 **Authentication:**
 - **Login Command**: `replica login` authenticates with username/password and stores JWT token locally
-- **Token Storage**: JWT stored in user's config directory (~/.config/replica or platform equivalent)
+- **Token Storage**: JWT stored in XDG-compliant config directory (~/.config/replica on Linux; platform-appropriate on macOS/Windows)
 - **Token Refresh**: Automatic refresh when token approaches expiration
 - **Logout**: `replica logout` removes stored credentials
 
-Commands output structured data (JSON) for scripting integration while providing human-readable formatting for interactive use.
+**Shell Integration:**
+- **Completion Command**: `replica completion [bash|zsh|fish]` generates shell completion scripts
+- **Installation**: Output can be sourced directly or saved to appropriate completion directory
+
+**Output Formatting:**
+- **Default**: Human-readable formatted output for interactive use
+- **JSON Mode**: `--json` flag outputs structured JSON for scripting integration
+- **Quiet Mode**: `--quiet` flag suppresses non-essential output
 
 ### Observability Stack
 **Objective**: Enable operational visibility across distributed deployments
@@ -357,8 +496,52 @@ Using golang-migrate with database-agnostic migration definitions:
 - **SQLite**: Default for development and small deployments
 - **MySQL/MariaDB**: Production deployments with existing MySQL infrastructure
 - **PostgreSQL**: Production deployments preferring PostgreSQL
+- **Single Writer Model**: One Replica instance per database; scale horizontally via federation, not database sharing
 
 The data access layer abstracts database-specific SQL, with migrations generating appropriate DDL for each backend.
+
+### Concurrency Model
+**Objective**: Maximize CPU utilization through idiomatic Go concurrency patterns
+
+Replica uses goroutines with the Go scheduler, applying semaphore-based limits only where external systems require it:
+
+**HTTP Request Handling:**
+- Go's `net/http` spawns a goroutine per incoming request automatically
+- All API endpoints handle concurrent requests without explicit coordination
+- Context propagation enables request-scoped cancellation and timeouts
+
+**Background Jobs:**
+- Each job spawns a goroutine; Go scheduler handles CPU multiplexing
+- Semaphore limits applied only for external I/O (webhooks, object store)
+- No complex worker pool infrastructure needed
+
+**Semaphore Pattern for External Systems:**
+```go
+// Limit concurrent external HTTP calls
+sem := make(chan struct{}, maxConcurrent)
+for _, webhook := range webhooks {
+    sem <- struct{}{}  // acquire slot
+    go func(w Webhook) {
+        defer func() { <-sem }()  // release slot
+        callWebhook(w)
+    }(webhook)
+}
+```
+
+**Where Semaphores Are Used:**
+- **Webhook delivery**: Limit concurrent outbound HTTP calls (default: 10)
+- **Object store operations**: Limit concurrent S3/GCS calls (default: 10)
+- **Sync asset fetching**: Limit concurrent asset downloads (default: 5)
+
+**Where Unbounded Goroutines Are Fine:**
+- Database queries (driver connection pool provides limit)
+- CPU-bound work (Go scheduler limits to GOMAXPROCS)
+- Internal processing (no external system to overwhelm)
+
+**Resource Management:**
+- All goroutines respect context cancellation for graceful shutdown
+- Semaphores release on context cancellation
+- Bounded concurrency prevents overwhelming external systems
 
 ### Workflow and Publishing
 **Objective**: Support configurable content lifecycle states with scheduled publishing
@@ -411,25 +594,27 @@ This allows operators to use meaningful names while maintaining stable UUIDs for
 Peer instances are registered via API:
 
 - **Registration Endpoint**: POST to register new peer with URL, friendly name, and credentials
-- **Credential Types**: API key or OAuth client credentials for the remote instance
+- **Credential Types**: OAuth client credentials (client ID and secret) for the remote instance
 - **Health Verification**: Optional connectivity check during registration
 - **Sync Permissions**: Configure which content types can sync with this peer, and in which direction
 - **Peer Management**: List, update, disable, or remove peers via API
 
-Peers are stored in the database and available to all instances in a multi-instance deployment.
+Peers are stored in the database and used for federation with other Replica instances.
 
 ### Background Job Queue
-**Objective**: Process asynchronous tasks reliably across multiple instances
+**Objective**: Process asynchronous tasks reliably within a single instance
 
-Jobs are queued in the database for distributed processing:
+Jobs are queued in the database for reliable processing:
 
 - **Database-Backed Queue**: Jobs stored as database records; survives instance restarts
-- **Worker Polling**: Instances poll for available jobs with distributed locking
-- **Job Types**: Scheduled publishing, webhook delivery, asset transformation, pruning
-- **Retry Logic**: Failed jobs retry with exponential backoff; dead-letter after max attempts
-- **Distributed Locking**: Database-level locks prevent duplicate job execution
+- **Goroutine Per Job**: Each job spawns a goroutine; Go scheduler handles parallelism
+- **Job Types**: Scheduled publishing, webhook delivery, asset transformation, pruning, audit streaming
+- **Semaphore Limits**: External I/O jobs (webhooks, S3) use semaphores to limit concurrency
+- **Retry Logic**: Configurable per job type with exponential backoff; dead-letter after max attempts
+- **Retry Configuration**: Different policies for different jobs (e.g., webhooks may retry more aggressively than pruning)
+- **No Distributed Locking**: Single-writer model means no coordination needed between instances
 
-This approach enables horizontal scaling without external dependencies like Redis.
+This simple approach relies on Go's scheduler for CPU-bound work and semaphores only where external systems require bounded concurrency.
 
 ### Content Caching
 **Objective**: Improve read performance for frequently accessed content
@@ -453,7 +638,7 @@ The webhook system serves as the primary extension model, allowing external serv
 - **Interceptor Pattern**: Webhooks are called during content operations, not just after
 - **Data Modification**: Subscribers can inspect and modify content data in their response
 - **Synchronous Flow**: CRUD operations wait for webhook responses before completing
-- **Timeout Handling**: Configurable timeouts; operations proceed if subscriber is unresponsive
+- **Timeout Handling**: Default 30-second timeout per subscriber; configurable per subscription
 
 **Event Types:**
 - **Content Events**: `content.creating`, `content.created`, `content.updating`, `content.updated`, `content.deleting`, `content.deleted`
@@ -473,6 +658,7 @@ Priority is advisory; the system orders subscribers by priority but doesn't guar
 - **API Management**: Subscriptions created, updated, deleted via REST endpoints
 - **Multiple Endpoints**: Multiple subscribers per event type
 - **Selective Subscription**: Subscribe to specific content types or all content
+- **Schema Version Selection**: Subscribers specify which schema version to receive (e.g., `1.2` or `1.*` for latest minor)
 - **Failure Mode**: Per-subscriber setting - `required` (abort operation on failure) or `optional` (skip and continue)
 - **Payload Signing**: HMAC signatures for webhook authenticity verification
 - **Retry Logic**: Failed deliveries retry with exponential backoff (for notification-only events)
@@ -538,8 +724,22 @@ Asset transformation model:
 - **Background Generation**: Variants generated asynchronously after upload
 - **On-Demand Fallback**: If a requested variant doesn't exist, generate synchronously and cache
 - **Sync Behavior**: Original assets sync; variants regenerated on destination or synced optionally
+- **Image Library**: vipsgen (cshum/vipsgen) Go bindings for libvips; high performance with C dependency
 
-Transformations use standard image processing; video transcoding is out of scope for 1.0.
+Transformations use libvips via vipsgen for image processing; video transcoding is out of scope for 1.0.
+
+### Bulk Operations
+**Objective**: Enable efficient batch processing for imports and mass updates
+
+The API supports bulk operations via JSON:API extension:
+
+- **Bulk Create**: Create multiple content items in a single request
+- **Bulk Update**: Update multiple items with different changes per item
+- **Bulk Delete**: Delete multiple items by UUID list
+- **Atomic Option**: Configurable all-or-nothing semantics; partial success by default
+- **Error Handling**: Detailed per-item error responses for partial failures
+- **Webhook Behavior**: Webhooks fire per-item within bulk operations
+- **Schema Versions**: Each item can specify `meta.schemaVersion`; header provides default for items without override
 
 ### Cursor-Based Pagination
 **Objective**: Enable efficient pagination through large result sets
@@ -547,9 +747,11 @@ Transformations use standard image processing; video transcoding is out of scope
 API pagination uses opaque cursors:
 
 - **Cursor Tokens**: Encode position in result set without exposing internals
+- **Default Page Size**: 100 items per page; configurable via query parameter
 - **Stable Results**: Consistent ordering even as content changes
 - **Deep Pagination**: Efficient retrieval regardless of offset depth
 - **JSON:API Compliance**: Links section includes next/prev cursors per specification
+- **Sparse Fieldsets**: Clients can request specific fields to reduce payload size
 
 ### Field Validation
 **Objective**: Enable expressive validation rules for content fields
@@ -571,7 +773,7 @@ Configuration uses YAML files with environment variable support:
 - **Primary Config**: YAML file for instance configuration, peer definitions, content types
 - **Environment Overrides**: Environment variables override YAML values for deployment-specific settings
 - **Secrets Handling**: Sensitive values (API keys, database credentials) via environment variables
-- **Hot Reload**: Configuration changes applied without restart where possible
+- **Restart Required**: Configuration changes require application restart; no hot reload
 
 ### Sync Reliability
 **Objective**: Ensure sync operations are reliable and recoverable
@@ -596,7 +798,13 @@ The audit log captures:
 - **Permission Changes**: Role and permission modifications
 - **Immutability**: Audit records cannot be modified or deleted; retention configurable
 
-Audit logs are stored separately from operational data and can be exported for compliance systems.
+**Audit Export:**
+- **Webhook Streaming**: Real-time audit events sent to configured webhook endpoints via background job
+- **SIEM Integration**: Webhook payloads compatible with common SIEM ingestion formats
+- **Buffering**: Events buffered and sent in batches to reduce overhead
+- **Failure Handling**: Failed deliveries retry with configurable policy; events never lost
+
+Audit logs are stored separately from operational data and streamed to external systems in real-time.
 
 ### API Versioning
 **Objective**: Enable backwards-compatible API evolution
@@ -634,7 +842,7 @@ TLS is handled at the infrastructure layer:
 Deployment artifacts:
 
 - **Static Binary**: Single self-contained executable for Linux, macOS, Windows
-- **Docker Image**: Official multi-arch image with minimal base (distroless or Alpine)
+- **Docker Image**: Official multi-arch Alpine-based image with libvips (~50MB)
 - **Configuration**: Environment variables and mounted config files
 - **Database**: External database connection; no embedded database in container
 
@@ -656,6 +864,7 @@ Documentation generation:
 Shutdown behavior:
 
 - **Signal Handling**: Respond to SIGTERM/SIGINT for controlled shutdown
+- **Shutdown Timeout**: 30-second default timeout for in-flight requests before forced shutdown
 - **Sync Interruption**: Active sync operations interrupted at next safe checkpoint
 - **Request Draining**: Stop accepting new requests; complete in-flight API calls
 - **Background Job Completion**: Allow short-running background jobs to finish
@@ -683,11 +892,30 @@ User management model:
 
 - **Initial Admin**: Created via CLI init command; has full system access
 - **User CRUD via API**: Subsequent users created, updated, deleted through REST endpoints
-- **Password Authentication**: Secure password hashing (bcrypt/argon2) for local authentication
-- **API Key Generation**: Users can generate personal API keys for programmatic access
-- **Session Management**: JWT tokens issued on login with configurable expiration
+- **Password Authentication**: Secure password hashing with argon2id for local authentication
+- **OAuth Client Creation**: Users can create OAuth clients for programmatic access (service accounts)
+- **Session Management**: JWT tokens issued on login with configurable expiration; refresh tokens for long-lived sessions
 
 User accounts are instance-local; only role definitions sync between instances (per RBAC sync scope clarification).
+
+### Backup and Restore
+**Objective**: Provide operators with convenient backup and restore capabilities
+
+CLI-driven backup and restore operations:
+
+- **Backup Command**: `replica backup --output backup.tar.gz` exports instance data
+- **Backup Contents**: Database dump, asset metadata references, instance configuration
+- **Asset Handling**: Backup includes asset references; actual files remain in object store
+- **Restore Command**: `replica restore --input backup.tar.gz` imports backup data
+- **Restore Behavior**: Restores to empty instance; conflicts with existing data rejected
+- **Format**: Portable archive format; can restore to different database backend
+
+**Limitations:**
+- Backup is point-in-time; active sync operations should be paused
+- Large instances may require significant time and storage
+- Object store assets must be backed up separately using standard S3 tools
+
+This provides convenience for operators while acknowledging that production-grade backup strategies often involve database-native and object-store-native tooling.
 
 ### Testing Strategy
 **Objective**: Ensure code quality and correctness across the distributed system
@@ -704,7 +932,7 @@ Test infrastructure:
 
 - **Docker Compose**: Multi-database test environment for local development
 - **CI Matrix**: GitHub Actions runs tests against all three database backends
-- **MinIO**: Local S3-compatible storage for object store tests
+- **In-Memory Blob Store**: Object store tests use gocloud.dev/blob `mem://` backend (no external dependencies)
 
 ## Risk Considerations and Mitigation Strategies
 
@@ -773,6 +1001,8 @@ Test infrastructure:
 11. **Translations**: Content items can be linked as translations; fetching content can include or follow translation links
 12. **Audit Trail**: All content modifications, sync operations, and permission changes are recorded in immutable audit log
 13. **Sync Idempotency**: Retrying a failed sync operation produces consistent results; partial syncs don't create invalid states
+14. **Schema Version Selection**: Clients can request content in specific schema versions; content is transformed to match requested version
+15. **Schema Version Discovery**: API exposes all supported schema versions per content type with changelogs and deprecation status
 
 ## Resource Requirements
 
@@ -786,22 +1016,29 @@ Test infrastructure:
 
 ### Technical Infrastructure
 
-- **Development**: Go 1.21+, Docker for database testing, MinIO for S3 testing
+- **Development**: Go 1.25+ (current stable 1.25.5), Docker for database testing
 - **CI/CD**: GitHub Actions for testing against all database backends
 - **Deployment**: Multi-arch Docker builds, goreleaser for binary releases
 - **Testing**: gremlins for mutation testing, standard Go test framework with coverage
 - **Dependencies**:
   - golang-migrate for database migrations
   - Standard library net/http for API server
+  - rs/zerolog for structured logging
+  - google/jsonapi for JSON:API marshaling/unmarshaling
+  - yuin/goldmark for Markdown to HTML rendering
   - OpenTelemetry Go SDK for observability
-  - AWS SDK for S3 integration
-  - google/cel-go for validation expressions
+  - gocloud.dev/blob for portable object storage (S3, GCS, Azure, local, in-memory)
+  - google/cel-go for validation and computed field expressions
   - swaggo/swag or similar for OpenAPI generation
-  - bcrypt or argon2 for password hashing
+  - argon2id for password hashing (golang.org/x/crypto/argon2)
+  - microcosm-cc/bluemonday for HTML sanitization
+  - cshum/vipsgen for image transformations (requires libvips)
+  - spf13/cobra for CLI with shell completion support
+  - google/uuid for UUIDv7 generation
 
 ### External Services
 
-- **Object Storage**: S3-compatible service for production binary asset storage
+- **Object Storage**: Any gocloud.dev/blob-compatible backend for production (S3, GCS, Azure, or local filesystem)
 - **Databases**: Access to test instances of MySQL and PostgreSQL for integration testing
 
 ## Integration Strategy
@@ -811,15 +1048,17 @@ Replica operates as a standalone service exposing JSON:API endpoints. Integratio
 - **Headless CMS**: Frontend applications consume content via JSON:API
 - **CI/CD Pipelines**: CLI tool integrates with deployment pipelines for sync operations
 - **Monitoring**: Prometheus scrapes metrics endpoint; traces export to configured collector
-- **Object Storage**: Standard S3 API for asset storage; no proprietary integrations
+- **Object Storage**: Portable blob storage via gocloud.dev/blob; supports S3, GCS, Azure, local filesystem
 
 ## Notes
 
+- **License**: AGPL-3.0; copyleft license requiring source sharing for deployed services
 - The 1.0 scope explicitly excludes a web admin UI; API and CLI provide complete functionality
-- AI-assisted conflict resolution is architectural provision; the interface is defined but specific AI integration can be enhanced post-1.0
-- Content pruning (version history limits) is configurable but not required; instances can retain full history if storage permits
+- AI-assisted conflict resolution is deferred to post-1.0; manual resolution is the 1.0 implementation; the AI callback interface will be defined in a future version
+- Content pruning (version history limits) runs as background job on schedule; instances can retain full history if storage permits
 - The system assumes instances can reach each other's APIs; network topology and firewall configuration is deployment-specific
-- All 32 architectural components confirmed as required for 1.0 MVP scope
+- Single-writer model: one Replica instance per database; horizontal scaling achieved through federation, not multi-instance clustering
+- All fields must be schema-defined; use JSON blob field type for flexible/unstructured data
 
 ### Change Log
 
@@ -829,3 +1068,19 @@ Replica operates as a standalone service exposing JSON:API endpoints. Integratio
 - **2025-12-18**: Added webhook subscription management (API only), configurable failure handling (required/optional), and CLI login flow authentication
 - **2025-12-18**: Added Peer Registration, Background Job Queue, and Content Caching architectural sections
 - **2025-12-19**: Plan refinement review completed - no additional clarifications needed; plan confirmed ready for task generation with 53 clarifications and 38 architectural components
+- **2025-12-19**: Removed API key authentication support - all authentication now uses OAuth 2.0/JWT only; updated Authentication section, Peer Registration, and Local User Management accordingly
+- **2025-12-19**: Added semantic versioning for content type schemas (MAJOR.MINOR.PATCH); clients can request specific schema versions; webhooks can specify schema version; admins can set minimum supported version; added schema version discovery API
+- **2025-12-19**: Added Git-like federation trust model - clarified that cross-instance sync follows application-level protocol (not database replication); pulling content requires some trust in content quality but guarantees no code execution, no irreversible data loss, and local RBAC/validation enforcement
+- **2025-12-19**: Added 15 new clarifications: built-in OAuth IdP (no external IdP in 1.0), rich text supports both HTML and Markdown per field, AGPL-3.0 license, vipsgen for image processing, CEL for computed fields, CLI shell completions, background job pruning, sync protocol tied to API version, single-writer database model, HMAC-SHA256 for webhooks, configurable job retry policies, audit webhook streaming, XDG-compliant CLI config, schema-defined fields only
+- **2025-12-19**: Added 12 new clarifications: UUIDv7 for time-ordered IDs, argon2id for password hashing, JSON:API sparse fieldsets, 30-second webhook timeout, no default asset size limit, GeoJSON Point for geolocation, RS256 JWT signing, 100-item default page size, camelCase naming convention, bulk operations support, Alpine+libvips Docker image; added Bulk Operations architectural section
+- **2025-12-19**: Added 7 new clarifications: zerolog for structured logging, google/jsonapi for JSON:API handling, 1-hour access/30-day refresh token defaults, sliding window rate limiting, bluemonday for HTML sanitization, confirmed Go 1.25+ requirement; updated dependencies list
+- **2025-12-19**: Added 5 final clarifications: goldmark for Markdown rendering, human-readable CLI output by default with --json flag, 100 items per sync chunk, 30-second graceful shutdown timeout, no field limit per content type; updated CLI and Graceful Shutdown sections
+- **2025-12-19**: Plan refinement review - added 2 clarifications: CLI backup/restore commands, AI conflict resolution deferred to post-1.0; added Backup and Restore architectural section; updated Notes to clarify AI deferral
+- **2025-12-19**: Added clarification for bulk request schema versions - per-item `meta.schemaVersion` field with header as default; updated Schema Version Management and Bulk Operations sections
+- **2025-12-19**: Added 3 clarifications: array field types supported (string[], number[], reference[]), date/datetime stored with timezone, no default request body limit; updated Supported Field Types section
+- **2025-12-19**: Plan refinement review completed - no additional clarifications required; plan confirmed comprehensive with 132 clarifications and 42 architectural components; ready for task generation
+- **2025-12-19**: Replaced AWS SDK/MinIO with gocloud.dev/blob for portable object storage; supports S3, GCS, Azure, local filesystem, and in-memory (for testing); updated Object Store Integration, Testing Strategy, Dependencies, and External Services sections
+- **2025-12-19**: Simplified Background Job Queue for single-instance model; removed distributed locking (not needed with one worker per database); updated to align with single-writer architecture
+- **2025-12-19**: Added Concurrency Model architectural section documenting goroutine usage: worker pools per job type, parallel webhook delivery, parallel asset transforms, connection pooling, context cancellation; updated Background Job Queue to reference worker pools
+- **2025-12-19**: Removed hot reload for configuration; app restart required for config changes
+- **2025-12-19**: Simplified concurrency model: replaced worker pools with goroutines + semaphore pattern; semaphores only for external I/O (webhooks, object store); rely on Go scheduler for CPU multiplexing
