@@ -1100,3 +1100,124 @@ Replica operates as a standalone service exposing JSON:API endpoints. Integratio
 - **2025-12-19**: Added per-peer vector clock tracking for sync state (Git-like model); no CouchDB-style replication IDs needed; each peer stores last-synced vector clock like Git's remote tracking refs
 - **2025-12-19**: Final review - corrected MVP scope count to 41 architectural components; removed erroneous distributed locking reference from Workflow section (contradicted single-writer model)
 - **2025-12-19**: Refinement review - updated Executive Summary to accurately reflect 1.0 scope (manual conflict resolution, AI-assisted deferred to post-1.0); plan confirmed ready for task generation
+- **2025-12-19**: Task generation complete - 31 tasks created across 10 groups (foundation, database, auth, content, assets, api, sync, background, observability, cli, testing)
+
+## Task Dependency Visualization
+
+```mermaid
+graph TD
+    T01[01: Project Foundation] --> T02[02: Configuration]
+    T02 --> T03[03: Database Abstraction]
+    T03 --> T04[04: Domain Models]
+    T04 --> T05[05: Auth JWT/OAuth]
+    T05 --> T06[06: RBAC]
+    T06 --> T07[07: Quota/Rate Limiting]
+    T04 --> T08[08: Content Service]
+    T06 --> T08
+    T04 --> T09[09: Schema Versioning]
+    T09 --> T10[10: Field Validation CEL]
+    T04 --> T11[11: Object Store]
+    T11 --> T12[12: Asset Service]
+    T04 --> T12
+    T12 --> T13[13: Asset Transforms]
+    T08 --> T14[14: Full-Text Search]
+    T08 --> T15[15: JSON:API Server]
+    T05 --> T15
+    T06 --> T15
+    T07 --> T15
+    T15 --> T16[16: Bulk Operations]
+    T08 --> T17[17: Sync Engine]
+    T04 --> T17
+    T17 --> T18[18: Conflict Resolution]
+    T05 --> T19[19: Peer Registration]
+    T17 --> T19
+    T03 --> T20[20: Background Jobs]
+    T20 --> T21[21: Webhook System]
+    T08 --> T21
+    T20 --> T22[22: Scheduled Publishing]
+    T08 --> T22
+    T15 --> T23[23: Observability]
+    T20 --> T24[24: Audit Logging]
+    T08 --> T24
+    T08 --> T25[25: Caching]
+    T02 --> T26[26: CLI Core]
+    T26 --> T27[27: CLI Operations]
+    T17 --> T27
+    T19 --> T27
+    T15 --> T28[28: OpenAPI Docs]
+    T08 --> T29[29: Multilingual]
+    T15 --> T30[30: Graceful Shutdown]
+    T20 --> T30
+    T01 --> T31[31: Testing Infrastructure]
+    T03 --> T31
+```
+
+## Execution Blueprint
+
+**Validation Gates:**
+- Reference: `/config/hooks/POST_PHASE.md`
+
+### Phase 1: Foundation
+**Parallel Tasks:**
+- Task 01: Project Foundation and Build Infrastructure
+
+### Phase 2: Core Configuration
+**Parallel Tasks:**
+- Task 02: Configuration System (depends on: 01)
+- Task 31: Testing Infrastructure (depends on: 01)
+
+### Phase 3: Data Layer
+**Parallel Tasks:**
+- Task 03: Database Abstraction Layer (depends on: 02)
+
+### Phase 4: Domain Models
+**Parallel Tasks:**
+- Task 04: Core Domain Models and Repository Layer (depends on: 03)
+- Task 20: Background Job Queue (depends on: 03)
+
+### Phase 5: Core Services
+**Parallel Tasks:**
+- Task 05: Authentication System (depends on: 04)
+- Task 09: Schema Versioning (depends on: 04)
+- Task 11: Object Store Integration (depends on: 04)
+- Task 17: Sync Engine Core (depends on: 04)
+
+### Phase 6: Authorization & Content
+**Parallel Tasks:**
+- Task 06: Role-Based Access Control (depends on: 05)
+- Task 10: Field Validation with CEL (depends on: 09)
+- Task 12: Asset Service (depends on: 11, 04)
+- Task 08: Content Service Core (depends on: 04, 06)
+
+### Phase 7: Extended Services
+**Parallel Tasks:**
+- Task 07: Quota and Rate Limiting (depends on: 06)
+- Task 13: Asset Transformations (depends on: 12)
+- Task 18: Conflict Resolution (depends on: 17)
+- Task 19: Peer Registration (depends on: 05, 17)
+- Task 14: Full-Text Search (depends on: 08)
+- Task 25: Caching (depends on: 08)
+- Task 29: Multilingual Support (depends on: 08)
+- Task 21: Webhook System (depends on: 20, 08)
+- Task 22: Scheduled Publishing (depends on: 20, 08)
+- Task 24: Audit Logging (depends on: 20, 08)
+
+### Phase 8: API Layer
+**Parallel Tasks:**
+- Task 15: JSON:API Server Core (depends on: 08, 05, 06, 07)
+- Task 26: CLI Core (depends on: 02)
+
+### Phase 9: API Extensions & CLI
+**Parallel Tasks:**
+- Task 16: Bulk Operations API (depends on: 15)
+- Task 23: Observability Stack (depends on: 15)
+- Task 28: OpenAPI Documentation (depends on: 15)
+- Task 30: Graceful Shutdown (depends on: 15, 20)
+- Task 27: CLI Operations Commands (depends on: 26, 17, 19)
+
+### Execution Summary
+- Total Phases: 9
+- Total Tasks: 31
+- Maximum Parallelism: 10 tasks (in Phase 7)
+- Critical Path Length: 9 phases
+- Critical Path: 01 → 02 → 03 → 04 → 05 → 06 → 08 → 15 → 16
