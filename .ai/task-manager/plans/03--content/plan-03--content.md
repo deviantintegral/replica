@@ -25,7 +25,7 @@ This release delivers the complete content management layer. After this release,
 | 08 | Content Service Core | CRUD operations, revision management, workflow states |
 | 09 | Schema Versioning | Semantic versioning for content types, migrations, version selection |
 | 10 | Field Validation with CEL | Expression-based validation, built-in validators |
-| 14 | Full-Text Search | Database-native FTS for PostgreSQL, MySQL, SQLite |
+| 14 | Full-Text Search | Database-native FTS for PostgreSQL, MariaDB, SQLite |
 | 25 | Content Caching | LRU in-memory cache with invalidation |
 | 29 | Multilingual Support | Translation links, language fallback chains |
 
@@ -57,7 +57,7 @@ internal/
 ├── search/
 │   ├── service.go         # Search abstraction
 │   ├── postgres.go        # PostgreSQL FTS
-│   ├── mysql.go           # MySQL FULLTEXT
+│   ├── mariadb.go         # MariaDB FULLTEXT
 │   └── sqlite.go          # SQLite FTS5
 ├── cache/
 │   ├── lru.go             # LRU cache implementation
@@ -252,13 +252,13 @@ type SearchQuery struct {
 
 **Database Implementations**:
 - **PostgreSQL**: tsvector/tsquery with GIN indexes
-- **MySQL**: FULLTEXT indexes with natural language mode
+- **MariaDB**: FULLTEXT indexes with natural language mode
 - **SQLite**: FTS5 virtual tables with porter stemmer
 
 **Deliverables**:
 - Search abstraction interface
 - PostgreSQL FTS implementation
-- MySQL FULLTEXT implementation
+- MariaDB FULLTEXT implementation
 - SQLite FTS5 implementation
 - Automatic index updates on content changes
 

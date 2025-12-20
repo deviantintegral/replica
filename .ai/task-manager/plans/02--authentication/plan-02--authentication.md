@@ -118,7 +118,7 @@ type Instance struct {
 **Deliverables**:
 - All domain entity definitions
 - Repository interfaces for each entity
-- SQLite, MySQL, PostgreSQL implementations
+- SQLite, MariaDB/MySQL, PostgreSQL implementations
 - Database migrations for all tables
 - UUIDv7 generation utility
 

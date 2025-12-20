@@ -11,11 +11,34 @@ created: 2025-12-19
 
 > Implement the foundation layer for Replica 1.0 as the first release. This release establishes project infrastructure, configuration management, database abstraction, and testing framework required by all subsequent releases.
 
+## Plan Clarifications
+
+| Question | Answer |
+|----------|--------|
+| Go version: 1.25+ or different? | Go 1.25 is correct (latest stable) |
+| SQLite driver: go-sqlite3 (CGO) or modernc.org/sqlite (pure Go)? | Keep go-sqlite3 with CGO |
+| Mutation testing in 0.1.0: configure only, full CI, or defer? | Full CI integration required |
+| Docker image size ceiling with CGO? | No hard limit; optimize where reasonable |
+| PostgreSQL driver: lib/pq or pgx? | Use pgx with database/sql interface |
+| Libvips in Docker image? | Deferred to 0.4.0 |
+| CLI framework? | Cobra |
+| Release automation? | release-please |
+| Testing framework? | Standard library testing (no testify) |
+| Go module path? | github.com/deviantintegral/replica |
+| Linter for CI? | golangci-lint |
+| Code coverage threshold? | 80% minimum |
+| Mutation testing threshold? | 60% minimum |
+| Database versions in CI? | Latest stable only (MariaDB 11.8, PostgreSQL 18) |
+| Config file location? | ./replica.yaml (current directory) |
+| License? | AGPL-3.0 |
+| Docker registry? | GitHub Container Registry (ghcr.io) |
+| Cross-compilation approach? | goreleaser-cross Docker image (handles CGO cross-compile) |
+
 ## Executive Summary
 
 This release establishes the foundational infrastructure for Replica, a distributed CMS. It creates the project structure, build system, configuration management, database abstraction layer, and testing framework. No user-facing features are delivered, but all subsequent releases depend on this foundation.
 
-The approach prioritizes multi-database support from day one, ensuring SQLite, MySQL, and PostgreSQL are all first-class backends. The testing infrastructure uses in-memory SQLite for fast unit tests while CI validates against all three databases. This foundation follows Go best practices and prepares for the authentication, content, and sync layers that follow.
+The approach prioritizes multi-database support from day one, ensuring SQLite, MariaDB (MySQL-compatible), and PostgreSQL are all first-class backends. The testing infrastructure uses in-memory SQLite for fast unit tests while CI validates against all three databases with full mutation testing integration. This foundation follows Go best practices and prepares for the authentication, content, and sync layers that follow.
 
 ## Context
 
@@ -25,7 +48,7 @@ The approach prioritizes multi-database support from day one, ensuring SQLite, M
 |---------------|--------------|------|
 | No codebase exists | Go project with build infrastructure | Foundation for all Replica development |
 | No configuration system | YAML + env var configuration | Enable deployment-specific settings |
-| No database support | SQLite, MySQL, PostgreSQL abstraction | Support diverse deployment environments |
+| No database support | SQLite, MariaDB/MySQL, PostgreSQL abstraction | Support diverse deployment environments |
 | No testing framework | Unit tests + CI matrix for all databases | Ensure quality across all backends |
 
 ### Background
@@ -33,8 +56,9 @@ The approach prioritizes multi-database support from day one, ensuring SQLite, M
 This is the first release in the Replica project. All architectural decisions are guided by the Replica 1.0 specification, which specifies:
 - Go 1.25+ as the runtime
 - golang-migrate for database migrations
-- Alpine + libvips as the Docker base image
+- Alpine as the Docker base image (libvips added in 0.4.0 for asset transforms)
 - zerolog for structured logging
+- Cobra for CLI framework
 - GitHub Actions for CI/CD
 - release-please for automated releases
 
@@ -72,7 +96,7 @@ graph TB
         CMD[cmd/replica] --> CFG[Config Loader]
         CFG --> DB[Database Layer]
         DB --> SQLITE[SQLite Driver]
-        DB --> MYSQL[MySQL Driver]
+        DB --> MYSQL[MariaDB/MySQL Driver]
         DB --> PG[PostgreSQL Driver]
     end
 
@@ -96,7 +120,7 @@ replica/
 │   ├── database/          # Database abstraction
 │   │   ├── migrations/    # golang-migrate migrations
 │   │   ├── sqlite/        # SQLite driver
-│   │   ├── mysql/         # MySQL driver
+│   │   ├── mysql/         # MariaDB/MySQL driver
 │   │   └── postgres/      # PostgreSQL driver
 │   └── testutil/          # Test utilities
 ├── Makefile               # Build automation
@@ -112,21 +136,24 @@ replica/
 **Objective**: Establish the Go project with professional build infrastructure
 
 **Deliverables**:
-- Go module initialization (`go.mod` with Go 1.25+)
+- Go module initialization (`go.mod` with Go 1.25+, module path: `github.com/deviantintegral/replica`)
 - Directory structure following Go conventions
-- Makefile with targets: `build`, `test`, `lint`, `fmt`, `docker`
-- Dockerfile using Alpine + libvips base (~50MB target)
-- docker-compose.yml for local development with SQLite, MySQL, PostgreSQL
-- GitHub Actions workflow for CI (lint, test, build)
-- goreleaser configuration for cross-platform binary releases
-- Basic `replica version` command
+- LICENSE file (AGPL-3.0)
+- Makefile with targets: `build`, `test`, `lint`, `fmt`, `docker` (lint uses golangci-lint)
+- Dockerfile using Alpine base (no libvips until 0.4.0)
+- docker-compose.yml for local development with SQLite, MariaDB 11.8, PostgreSQL 18
+- GitHub Actions workflow for CI (lint, test, build, publish to ghcr.io)
+- release-please configuration for automated changelog and releases
+- goreleaser configuration using goreleaser-cross for CGO cross-compilation (Linux/macOS/Windows)
+- Basic `replica version` command using Cobra CLI framework
 
 **Acceptance Criteria**:
 - [ ] `make build` produces static binary for Linux/macOS/Windows
 - [ ] `make test` runs all tests
-- [ ] `make docker` builds container image under 60MB
+- [ ] `make docker` builds container image (no libvips; optimize size where reasonable)
 - [ ] CI passes on all PRs
-- [ ] `replica version` outputs version information
+- [ ] release-please creates releases from conventional commits
+- [ ] `replica version` outputs version information (using Cobra)
 
 ### Task 02: Configuration System
 
@@ -134,10 +161,10 @@ replica/
 
 **Deliverables**:
 - Configuration struct definitions for all settings
-- YAML file loader with validation
-- Environment variable override support (e.g., `REPLICA_DATABASE_URL`)
+- YAML file loader with validation (default path: `./replica.yaml`)
+- Environment variable override support (e.g., `REPLICA_DATABASE_DRIVER`)
 - Configuration documentation in code comments
-- Default configuration file template
+- Default configuration file template (`replica.yaml.example`)
 
 **Configuration Categories**:
 ```yaml
@@ -145,7 +172,7 @@ instance:
   name: "production-us-east"
 
 database:
-  driver: sqlite  # sqlite, mysql, postgres
+  driver: sqlite  # sqlite, mariadb, postgres
   url: "replica.db"
 
 server:
@@ -165,26 +192,33 @@ logging:
 
 ### Task 03: Database Abstraction Layer
 
-**Objective**: Provide unified database interface supporting SQLite, MySQL, and PostgreSQL
+**Objective**: Provide unified database interface supporting SQLite, MariaDB/MySQL, and PostgreSQL
 
 **Deliverables**:
 - Database interface abstraction
 - SQLite driver implementation
-- MySQL driver implementation
+- MariaDB/MySQL driver implementation
 - PostgreSQL driver implementation
 - Migration system using golang-migrate
 - Connection pool configuration
 - Health check functionality
 
-**Database Interface**:
+**Database Interface** (using standard database/sql):
 ```go
 type Database interface {
+    // Access underlying *sql.DB for queries
+    DB() *sql.DB
     Migrate() error
     Ping(ctx context.Context) error
     Close() error
     // Transaction support
     Begin(ctx context.Context) (Tx, error)
 }
+
+// Drivers (all implement database/sql):
+// - github.com/mattn/go-sqlite3 (SQLite, CGO required)
+// - github.com/go-sql-driver/mysql (MariaDB/MySQL)
+// - github.com/jackc/pgx/v5/stdlib (PostgreSQL, database/sql compatible)
 ```
 
 **Acceptance Criteria**:
@@ -200,21 +234,21 @@ type Database interface {
 **Deliverables**:
 - Test helper utilities for database setup/teardown
 - In-memory SQLite for fast unit tests
-- Docker-based test fixtures for MySQL/PostgreSQL
+- Docker-based test fixtures for MariaDB/PostgreSQL
 - GitHub Actions matrix testing all database backends
 - Code coverage configuration and reporting
-- gremlins mutation testing setup
+- gremlins mutation testing with full CI integration
 
 **Test Categories**:
-- Unit tests: Run against in-memory SQLite
+- Unit tests: Run against in-memory SQLite, using Go's standard `testing` package
 - Integration tests: Run against all databases via CI matrix
-- Mutation tests: gremlins configuration for coverage verification
+- Mutation tests: gremlins with full CI integration (must pass before merge)
 
 **Acceptance Criteria**:
 - [ ] `make test` runs unit tests quickly (<30s)
-- [ ] CI matrix tests against SQLite, MySQL, PostgreSQL
-- [ ] Code coverage reports generated
-- [ ] gremlins mutation testing configured (can be run manually)
+- [ ] CI matrix tests against SQLite, MariaDB 11.8, PostgreSQL 18
+- [ ] Code coverage ≥80% (CI fails below threshold)
+- [ ] gremlins mutation score ≥60% (CI fails below threshold)
 
 ## Dependencies
 
@@ -233,11 +267,8 @@ This release has no external dependencies - it is the foundation.
 <details>
 <summary>Technical Risks</summary>
 
-- **Multi-database SQL compatibility**: Subtle differences between SQLite, MySQL, and PostgreSQL query behavior
-    - **Mitigation**: Use golang-migrate's database-agnostic features; avoid database-specific SQL; comprehensive integration tests against all backends in CI
-
-- **libvips dependency in Docker**: C library dependency may cause build complexity
-    - **Mitigation**: Use pre-built Alpine packages; document build prerequisites clearly
+- **Multi-database SQL compatibility**: Subtle differences between SQLite, MariaDB, and PostgreSQL query behavior
+    - **Mitigation**: Use golang-migrate's database-agnostic features; avoid database-specific SQL; comprehensive integration tests against all backends in CI; use database/sql interface uniformly across all drivers (go-sqlite3, go-sql-driver/mysql, pgx/v5/stdlib)
 </details>
 
 <details>
@@ -256,19 +287,25 @@ This release has no external dependencies - it is the foundation.
 - Go proficiency (modules, interfaces, testing)
 - Docker and container builds
 - GitHub Actions CI/CD
-- SQL and database administration basics for SQLite, MySQL, PostgreSQL
+- SQL and database administration basics for SQLite, MariaDB, PostgreSQL
 
 ### Technical Infrastructure
 - Go 1.25+ development environment
 - Docker for local database testing
 - GitHub repository with Actions enabled
-- Access to test MySQL and PostgreSQL instances (via Docker)
+- Access to test MariaDB and PostgreSQL instances (via Docker)
 
 ### Dependencies
 - golang-migrate (database migrations)
 - zerolog (structured logging)
 - yaml.v3 (configuration parsing)
-- testify (test assertions - optional)
+- cobra (CLI framework)
+- golangci-lint (linting)
+- gremlins (mutation testing)
+- Database drivers using database/sql interface:
+  - github.com/mattn/go-sqlite3 (SQLite, CGO required)
+  - github.com/go-sql-driver/mysql (MariaDB/MySQL)
+  - github.com/jackc/pgx/v5/stdlib (PostgreSQL)
 
 ## Release Checklist
 
@@ -283,10 +320,20 @@ This release has no external dependencies - it is the foundation.
 - This release focuses on infrastructure only; no user-facing features
 - The database interface is intentionally minimal; it will be extended in future releases as domain models are added
 - Configuration categories shown are partial; future releases will add auth, object store, and sync configuration
-- release-please integration may be added in a later task; goreleaser handles initial binary releases
+- Cobra CLI framework included from the start to support future commands
+- All database drivers use the standard database/sql interface for uniform abstraction
+- Docker image excludes libvips; it will be added in Release 0.4.0 (Asset Management)
+- *Per clarification*: PostgreSQL uses pgx/v5/stdlib instead of lib/pq for better performance and active maintenance
+- *Per clarification*: Mutation testing (gremlins) is fully integrated in CI, not just configured
 
 ### Change Log
 
 - **2025-12-19**: Initial release plan created
 - **2025-12-19**: Plan refinement - added Executive Summary, Context, Architectural Approach with mermaid diagram, Risk Considerations, and Resource Requirements sections per PLAN_TEMPLATE.md; renumbered Testing Infrastructure to Task 04 for this release; added future release references to "Not Included" section
 - **2025-12-19**: Plan renumbered from ID 2 to ID 1 after master plan removal; removed parent_plan references
+- **2025-12-19**: Clarifications incorporated: deferred libvips to 0.4.0; added Cobra CLI framework; added release-please; specified database/sql with lib/pq for PostgreSQL abstraction; confirmed standard library testing (no testify); confirmed go-sqlite3 (CGO) for SQLite driver
+- **2025-12-19**: Plan refinement session - Updated PostgreSQL driver from lib/pq to pgx/v5/stdlib; upgraded mutation testing from "configure only" to full CI integration; removed hard Docker image size limit (optimize where reasonable); added Plan Clarifications table with all Q&A
+- **2025-12-19**: Additional clarifications - Set Go module path to github.com/deviantintegral/replica; confirmed golangci-lint for linting; set coverage threshold to 80% and mutation threshold to 60%; specified MySQL 8.4 and PostgreSQL 17 for CI; set config file path to ./replica.yaml
+- **2025-12-19**: Final clarifications - Set license to AGPL-3.0; Docker images to ghcr.io; cross-compilation via goreleaser-cross Docker image for CGO support
+- **2025-12-19**: Updated to use MariaDB instead of MySQL for all tests, CI jobs, and docker-compose; MySQL compatibility retained via go-sql-driver/mysql
+- **2025-12-19**: Updated to latest stable versions: MariaDB 11.8, PostgreSQL 18
