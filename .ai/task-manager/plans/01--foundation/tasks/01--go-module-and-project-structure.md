@@ -1,7 +1,7 @@
 ---
 id: 1
 group: "project-foundation"
-dependencies: []
+dependencies: [0]
 status: "pending"
 created: "2026-01-14"
 skills:
@@ -32,7 +32,7 @@ Use your internal Todo tool to track these and keep on track.
 - License: AGPL-3.0
 
 ## Input Dependencies
-None - this is the foundational task.
+- Task 00: Development Environment Setup (Go toolchain must be installed)
 
 ## Output Artifacts
 - `go.mod` file

@@ -33,6 +33,9 @@ created: 2025-12-19
 | License? | AGPL-3.0 |
 | Docker registry? | GitHub Container Registry (ghcr.io) |
 | Cross-compilation approach? | goreleaser-cross Docker image (handles CGO cross-compile) |
+| SessionStart script location? | .claude/scripts/session_start.sh |
+| Pre-commit hooks to configure? | golangci-lint + gofmt + conventional commits |
+| Target development environment? | Debian/Ubuntu (apt-based) |
 
 ## Executive Summary
 
@@ -68,6 +71,7 @@ This is the first release in the Replica project. All architectural decisions ar
 
 | Task | Name | Description |
 |------|------|-------------|
+| 00 | Development Environment Setup | SessionStart script for golang, pre-commit, and system-level tools |
 | 01 | Project Foundation and Build Infrastructure | Go module, project structure, Makefile, Docker, CI/CD |
 | 02 | Configuration System | YAML config parsing, environment variable overrides, validation |
 | 03 | Database Abstraction Layer | Multi-database support, migrations with golang-migrate |
@@ -130,6 +134,58 @@ replica/
 ```
 
 ## Task Details
+
+### Task 00: Development Environment Setup
+
+**Objective**: Create a SessionStart script that automatically installs and configures required development tools for Debian/Ubuntu-based environments
+
+**Deliverables**:
+- SessionStart script at `.claude/scripts/session_start.sh` (*per clarification*)
+- Installation of Go 1.25 toolchain (*per clarification: Go 1.25 is current stable*)
+- Installation and configuration of pre-commit with golangci-lint, gofmt, and conventional commits hooks (*per clarification*)
+- `.pre-commit-config.yaml` configuration file for the repository
+- Documentation of system-level tool requirements
+- Script should be idempotent (safe to run multiple times)
+- Script should be kept updated as new system-level tools are required
+
+**System-Level Tools**:
+- Go 1.25 (required for all development, installed via official Go binaries)
+- pre-commit (for git hook management, installed via pip or pipx)
+- golangci-lint (for linting, as specified in Task 01)
+- commitlint or similar (for conventional commit enforcement)
+- Additional tools as needed by future tasks
+
+**Target Environment**: Debian/Ubuntu (apt-based) (*per clarification*)
+
+**Pre-commit Hooks Configuration**:
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/golangci/golangci-lint
+    hooks:
+      - id: golangci-lint
+  - repo: local
+    hooks:
+      - id: gofmt
+        name: gofmt
+        entry: gofmt -w
+        language: system
+        types: [go]
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+```
+
+**Acceptance Criteria**:
+- [ ] SessionStart script at `.claude/scripts/session_start.sh` executes without errors on fresh Debian/Ubuntu environment
+- [ ] Go 1.25 toolchain is properly installed and accessible via `go version`
+- [ ] pre-commit is installed and hooks are configured
+- [ ] golangci-lint pre-commit hook runs on staged Go files
+- [ ] gofmt pre-commit hook runs on staged Go files
+- [ ] Conventional commit message hook validates commit messages
+- [ ] Script is idempotent (running twice produces same result)
+- [ ] Script documents what it installs and why
 
 ### Task 01: Project Foundation and Build Infrastructure
 
@@ -338,11 +394,15 @@ This release has no external dependencies - it is the foundation.
 - **2025-12-19**: Updated to use MariaDB instead of MySQL for all tests, CI jobs, and docker-compose; MySQL compatibility retained via go-sql-driver/mysql
 - **2025-12-19**: Updated to latest stable versions: MariaDB 11.8, PostgreSQL 18
 - **2026-01-14**: Tasks generated (16 tasks) and execution blueprint created
+- **2026-01-14**: Added Task 00: Development Environment Setup (SessionStart script for golang, pre-commit, system tools)
+- **2026-01-14**: Refined Task 00 with clarifications: script path (.claude/scripts/session_start.sh), pre-commit hooks (golangci-lint + gofmt + conventional commits), target environment (Debian/Ubuntu), added .pre-commit-config.yaml example and expanded acceptance criteria
+- **2026-01-14**: Task file 00--dev-environment-setup.md generated; updated Task 01 dependencies to include Task 00
 
 ## Task Dependency Visualization
 
 ```mermaid
 graph TD
+    00[Task 00: Dev Environment Setup] --> 01[Task 01: Go Module & Structure]
     01[Task 01: Go Module & Structure] --> 02[Task 02: Cobra CLI & Version]
     02 --> 03[Task 03: Makefile Build System]
     02 --> 07[Task 07: Configuration System]
@@ -371,9 +431,13 @@ graph TD
 **Validation Gates:**
 - Reference: `/config/hooks/POST_PHASE.md`
 
+### Phase 0: Development Environment Setup
+**Parallel Tasks:**
+- Task 00: Development Environment Setup (SessionStart script for golang, pre-commit, system tools)
+
 ### Phase 1: Project Initialization
 **Parallel Tasks:**
-- Task 01: Go Module and Project Structure
+- Task 01: Go Module and Project Structure (depends on: 00)
 
 ### Phase 2: CLI and Configuration Foundation
 **Parallel Tasks:**
@@ -421,7 +485,7 @@ graph TD
 - Confirm CI pipeline is green
 
 ### Execution Summary
-- Total Phases: 9
-- Total Tasks: 16
+- Total Phases: 10
+- Total Tasks: 17
 - Maximum Parallelism: 4 tasks (in Phase 6)
-- Critical Path Length: 9 phases (01 → 02 → 03 → 04 → 05 → 15 → 16)
+- Critical Path Length: 10 phases (00 → 01 → 02 → 03 → 04 → 05 → 15 → 16)
