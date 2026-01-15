@@ -27,6 +27,7 @@ created: 2025-12-19
 | Go module path? | github.com/deviantintegral/replica |
 | Linter for CI? | golangci-lint |
 | Code coverage threshold? | 80% minimum |
+| Coverage reporting tool? | go test -coverprofile with GitHub Actions |
 | Mutation testing threshold? | 60% minimum |
 | Database versions in CI? | Latest stable only (MariaDB 11.8, PostgreSQL 18) |
 | Config file location? | ./replica.yaml (current directory) |
@@ -38,7 +39,8 @@ created: 2025-12-19
 | Target development environment? | Debian/Ubuntu (apt-based) |
 | Dependency management automation? | Renovate with auto-merge after 3 days (all update types including major) |
 | Renovate config validation? | Pre-commit hook + CI job using `npx renovate-config-validator --strict` |
-| Renovate custom managers? | Yes, for all bash/curl installed dependencies (Go, golangci-lint, Docker images) |
+| Renovate custom managers? | Yes, for all bash/curl installed dependencies (Go, golangci-lint, Docker images, goreleaser-cross) |
+| Conventional commit hook? | conventional-pre-commit (pre-commit hook, not commitlint) |
 
 ## Executive Summary
 
@@ -155,7 +157,7 @@ replica/
 - Go 1.25 (required for all development, installed via official Go binaries)
 - pre-commit (for git hook management, installed via pip or pipx)
 - golangci-lint (for linting, as specified in Task 01)
-- commitlint or similar (for conventional commit enforcement)
+- conventional-pre-commit (for conventional commit enforcement via pre-commit hook)
 - Additional tools as needed by future tasks
 
 **Target Environment**: Debian/Ubuntu (apt-based) (*per clarification*)
@@ -246,9 +248,17 @@ repos:
     },
     {
       "customType": "regex",
-      "fileMatch": ["^Dockerfile$"],
+      "fileMatch": ["^Dockerfile$", "^\\.goreleaser\\.ya?ml$"],
       "matchStrings": [
         "FROM\\s+(?<depName>[^:]+):(?<currentValue>[^\\s]+)"
+      ],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "fileMatch": ["^\\.goreleaser\\.ya?ml$"],
+      "matchStrings": [
+        "image:\\s*['\"]?(?<depName>goreleaser/goreleaser-cross):(?<currentValue>[^\\s'\"]+)"
       ],
       "datasourceTemplate": "docker"
     }
@@ -452,12 +462,14 @@ This release has no external dependencies - it is the foundation.
 - **2025-12-19**: Final clarifications - Set license to AGPL-3.0; Docker images to ghcr.io; cross-compilation via goreleaser-cross Docker image for CGO support
 - **2025-12-19**: Updated to use MariaDB instead of MySQL for all tests, CI jobs, and docker-compose; MySQL compatibility retained via go-sql-driver/mysql
 - **2025-12-19**: Updated to latest stable versions: MariaDB 11.8, PostgreSQL 18
-- **2026-01-14**: Tasks generated (16 tasks) and execution blueprint created
+- **2026-01-14**: Tasks generated (17 tasks: 00-16) and execution blueprint created
 - **2026-01-14**: Added Task 00: Development Environment Setup (SessionStart script for golang, pre-commit, system tools)
 - **2026-01-14**: Refined Task 00 with clarifications: script path (.claude/scripts/session_start.sh), pre-commit hooks (golangci-lint + gofmt + conventional commits), target environment (Debian/Ubuntu), added .pre-commit-config.yaml example and expanded acceptance criteria
 - **2026-01-14**: Task file 00--dev-environment-setup.md generated; updated Task 01 dependencies to include Task 00
 - **2026-01-15**: Added Renovate configuration requirements: auto-merge after 3 days, pre-commit hook validation, CI validation job, custom managers for bash/curl dependencies (Go, golangci-lint, Docker images)
 - **2026-01-15**: Updated Renovate config: removed schedule, enabled auto-merge for all update types including major
+- **2026-01-15**: Plan refinement session - Added coverage reporting tool clarification (go test -coverprofile); confirmed conventional-pre-commit as commit hook (removed commitlint ambiguity); added goreleaser-cross to Renovate custom managers; fixed task count in changelog (17 tasks: 00-16)
+- **2026-01-15**: Task files regenerated (17 tasks: 00-16) with detailed implementation notes; complexity analysis performed (all tasks ≤5); task IDs and dependencies aligned with execution blueprint
 
 ## Task Dependency Visualization
 
