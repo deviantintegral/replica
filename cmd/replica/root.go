@@ -22,16 +22,11 @@ var rootCmd = &cobra.Command{
 	Long: `Replica is a distributed content management system supporting
 multiple database backends and designed for offline-first workflows.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		// Load configuration
+		// Load configuration (uses defaults if file doesn't exist)
 		var err error
 		cfg, err = config.Load(cfgFile)
 		if err != nil {
-			// If config file was explicitly specified and doesn't exist, error
-			if cfgFile != "" {
-				return fmt.Errorf("loading config: %w", err)
-			}
-			// Otherwise use defaults
-			cfg = config.Default()
+			return fmt.Errorf("loading config: %w", err)
 		}
 
 		// Initialize logger
