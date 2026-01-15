@@ -1,0 +1,45 @@
+# Git
+.git
+.gitignore
+
+# Build artifacts
+bin/
+*.out
+coverage.*
+
+# IDE/Editor
+.idea/
+.vscode/
+
+# Documentation (except README.md)
+docs/
+*.md
+!README.md
+
+# CI/CD and tooling
+.github/
+.ai/
+.claude/
+
+# Test files
+testdata/
+*_test.go
+
+# Docker (prevent recursive builds)
+docker-compose.yml
+Dockerfile
+
+# Environment and secrets
+.env
+.env.*
+.env.local
+.env.*.local
+
+# Data files
+data/
+
+# Misc
+LICENSE
+Makefile
+.pre-commit-config.yaml
+.golangci.yml

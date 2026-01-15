@@ -1,0 +1,117 @@
+# Docker Compose configuration for local development
+# Usage:
+#   SQLite:   docker compose --profile sqlite up
+#   MariaDB:  docker compose --profile mariadb up
+#   Postgres: docker compose --profile postgres up
+
+services:
+  # MariaDB database service
+  mariadb:
+    image: mariadb:11.8
+    profiles:
+      - mariadb
+    environment:
+      MYSQL_ROOT_PASSWORD: replica_root
+      MYSQL_DATABASE: replica
+      MYSQL_USER: replica
+      MYSQL_PASSWORD: replica_secret
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # PostgreSQL database service
+  postgres:
+    image: postgres:18
+    profiles:
+      - postgres
+    environment:
+      POSTGRES_DB: replica
+      POSTGRES_USER: replica
+      POSTGRES_PASSWORD: replica_secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U replica -d replica"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Replica service with SQLite backend
+  replica-sqlite:
+    build:
+      context: .
+      args:
+        VERSION: ${VERSION:-dev}
+        COMMIT: ${COMMIT:-unknown}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
+    profiles:
+      - sqlite
+    environment:
+      REPLICA_DATABASE_DRIVER: sqlite
+      REPLICA_DATABASE_DSN: /data/replica.db
+      REPLICA_HTTP_PORT: "8080"
+      REPLICA_LOG_LEVEL: debug
+    ports:
+      - "8080:8080"
+    volumes:
+      - sqlite_data:/data
+
+  # Replica service with MariaDB backend
+  replica-mariadb:
+    build:
+      context: .
+      args:
+        VERSION: ${VERSION:-dev}
+        COMMIT: ${COMMIT:-unknown}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
+    profiles:
+      - mariadb
+    environment:
+      REPLICA_DATABASE_DRIVER: mysql
+      REPLICA_DATABASE_DSN: replica:replica_secret@tcp(mariadb:3306)/replica?parseTime=true
+      REPLICA_HTTP_PORT: "8080"
+      REPLICA_LOG_LEVEL: debug
+    ports:
+      - "8080:8080"
+    depends_on:
+      mariadb:
+        condition: service_healthy
+
+  # Replica service with PostgreSQL backend
+  replica-postgres:
+    build:
+      context: .
+      args:
+        VERSION: ${VERSION:-dev}
+        COMMIT: ${COMMIT:-unknown}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
+    profiles:
+      - postgres
+    environment:
+      REPLICA_DATABASE_DRIVER: postgres
+      REPLICA_DATABASE_DSN: postgres://replica:replica_secret@postgres:5432/replica?sslmode=disable
+      REPLICA_HTTP_PORT: "8080"
+      REPLICA_LOG_LEVEL: debug
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  mariadb_data:
+    name: replica_mariadb_data
+  postgres_data:
+    name: replica_postgres_data
+  sqlite_data:
+    name: replica_sqlite_data
