@@ -3,6 +3,7 @@ module github.com/deviantintegral/replica
 go 1.25
 
 require (
+	github.com/mattn/go-sqlite3 v1.14.33
 	github.com/rs/zerolog v1.34.0
 	github.com/spf13/cobra v1.10.2
 	gopkg.in/yaml.v3 v3.0.1
