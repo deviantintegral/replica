@@ -23,7 +23,7 @@ set -euo pipefail
 # Version Configuration (for Renovate compatibility)
 # =============================================================================
 GO_VERSION="1.25"
-GOLANGCI_LINT_VERSION="v1.64.5"
+GOLANGCI_LINT_VERSION="v1.64.8"
 
 # =============================================================================
 # Color Output Helpers
