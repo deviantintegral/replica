@@ -27,8 +27,8 @@ jobs:
         with:
           version: latest
 
-  test:
-    name: Test
+  unit-test:
+    name: Unit Test
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
@@ -53,6 +53,72 @@ jobs:
         with:
           files: coverage.out
           fail_ci_if_error: false
+
+  integration-test:
+    name: Integration Test (${{ matrix.database }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        database: [sqlite, mariadb, postgres]
+        include:
+          - database: sqlite
+            db_driver: sqlite
+            db_url: ":memory:"
+          - database: mariadb
+            db_driver: mariadb
+            db_url: "replica:replica_password@tcp(127.0.0.1:3306)/replica"
+          - database: postgres
+            db_driver: postgres
+            db_url: "postgres://replica:replica_password@127.0.0.1:5432/replica?sslmode=disable"
+    services:
+      mariadb:
+        image: mariadb:11.8
+        env:
+          MARIADB_ROOT_PASSWORD: root_password
+          MARIADB_DATABASE: replica
+          MARIADB_USER: replica
+          MARIADB_PASSWORD: replica_password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: replica
+          POSTGRES_USER: replica
+          POSTGRES_PASSWORD: replica_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U replica -d replica"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: Install SQLite dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsqlite3-dev
+
+      - name: Run integration tests
+        env:
+          TEST_DB_DRIVER: ${{ matrix.db_driver }}
+          TEST_DB_URL: ${{ matrix.db_url }}
+        run: |
+          go test -race -tags=integration ./...
 
   build:
     name: Build
