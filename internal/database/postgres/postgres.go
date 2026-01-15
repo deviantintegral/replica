@@ -89,10 +89,14 @@ func (p *PostgresDB) DB() *sql.DB {
 	return p.db
 }
 
-// Migrate runs database migrations.
-// Currently returns nil as migrations will be implemented in Task 12.
+// Migrate runs database migrations using golang-migrate.
+// It applies all pending migrations from the embedded SQL files.
 func (p *PostgresDB) Migrate() error {
-	p.logger.Debug().Msg("migrate called (not yet implemented)")
+	p.logger.Debug().Msg("running database migrations")
+	if err := database.RunMigrations(p); err != nil {
+		return err
+	}
+	p.logger.Info().Msg("database migrations completed successfully")
 	return nil
 }
 

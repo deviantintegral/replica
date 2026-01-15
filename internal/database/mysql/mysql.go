@@ -149,10 +149,14 @@ func (m *MariaDB) DB() *sql.DB {
 	return m.db
 }
 
-// Migrate runs database migrations.
-// Currently returns nil as migrations will be implemented in a future task.
+// Migrate runs database migrations using golang-migrate.
+// It applies all pending migrations from the embedded SQL files.
 func (m *MariaDB) Migrate() error {
-	m.logger.Debug().Msg("migrate called (not yet implemented)")
+	m.logger.Debug().Msg("running database migrations")
+	if err := database.RunMigrations(m); err != nil {
+		return err
+	}
+	m.logger.Info().Msg("database migrations completed successfully")
 	return nil
 }
 

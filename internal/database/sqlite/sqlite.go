@@ -102,10 +102,14 @@ func (s *SQLiteDB) DB() *sql.DB {
 	return s.db
 }
 
-// Migrate runs database migrations.
-// Currently returns nil as migrations will be implemented in Task 12.
+// Migrate runs database migrations using golang-migrate.
+// It applies all pending migrations from the embedded SQL files.
 func (s *SQLiteDB) Migrate() error {
-	s.logger.Debug().Msg("migrate called (not yet implemented)")
+	s.logger.Debug().Msg("running database migrations")
+	if err := database.RunMigrations(s); err != nil {
+		return err
+	}
+	s.logger.Info().Msg("database migrations completed successfully")
 	return nil
 }
 

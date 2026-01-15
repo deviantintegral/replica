@@ -4,6 +4,7 @@ go 1.25
 
 require (
 	github.com/go-sql-driver/mysql v1.8.1
+	github.com/golang-migrate/migrate/v4 v4.18.1
 	github.com/jackc/pgx/v5 v5.7.4
 	github.com/mattn/go-sqlite3 v1.14.33
 	github.com/rs/zerolog v1.34.0
