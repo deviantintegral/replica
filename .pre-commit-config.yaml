@@ -1,0 +1,36 @@
+# Pre-commit hooks configuration
+# See https://pre-commit.com for more information
+#
+# To install hooks: pre-commit install && pre-commit install --hook-type commit-msg
+# To run manually: pre-commit run --all-files
+
+repos:
+  # golangci-lint - Fast Go linters runner
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v1.64.5
+    hooks:
+      - id: golangci-lint
+
+  # gofmt - Format Go source code (local hook)
+  - repo: local
+    hooks:
+      - id: gofmt
+        name: gofmt
+        description: Format Go source code with gofmt
+        entry: gofmt -w
+        language: system
+        types: [go]
+
+  # conventional-pre-commit - Enforce conventional commit messages
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v3.4.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+
+  # renovate-config-validator - Validate Renovate configuration
+  - repo: https://github.com/renovatebot/pre-commit-hooks
+    rev: 39.84.0
+    hooks:
+      - id: renovate-config-validator
+        args: ['--strict']
