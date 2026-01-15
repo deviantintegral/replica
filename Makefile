@@ -27,7 +27,7 @@ DOCKER_TAG := $(VERSION)
 # Default target
 .DEFAULT_GOAL := help
 
-.PHONY: help all build test lint fmt docker clean coverage
+.PHONY: help all build test lint fmt docker clean coverage coverage-html mutation mutation-html
 
 ## help: Show available targets
 help:
@@ -67,11 +67,35 @@ clean:
 	rm -rf $(OUTPUT_DIR)
 	$(GO) clean -cache -testcache
 
-## coverage: Show test coverage report
+## coverage: Run tests with coverage and check 80% threshold
 coverage:
 	@mkdir -p $(OUTPUT_DIR)
-	CGO_ENABLED=$(CGO_ENABLED) $(GO) test $(GOFLAGS) -race -coverprofile=$(OUTPUT_DIR)/coverage.out ./...
+	CGO_ENABLED=$(CGO_ENABLED) $(GO) test $(GOFLAGS) -race -coverprofile=$(OUTPUT_DIR)/coverage.out -covermode=atomic ./...
+	@COVERAGE=$$($(GO) tool cover -func=$(OUTPUT_DIR)/coverage.out | grep total | awk '{print $$3}' | sed 's/%//'); \
+	echo "Total coverage: $${COVERAGE}%"; \
+	THRESHOLD=80; \
+	if [ "$$(echo "$$COVERAGE < $$THRESHOLD" | bc -l)" -eq 1 ]; then \
+		echo "Coverage $${COVERAGE}% is below threshold $${THRESHOLD}%"; \
+		exit 1; \
+	fi; \
+	echo "Coverage $${COVERAGE}% meets threshold $${THRESHOLD}%"
+
+## coverage-html: Generate HTML coverage report
+coverage-html:
+	@mkdir -p $(OUTPUT_DIR)
+	CGO_ENABLED=$(CGO_ENABLED) $(GO) test $(GOFLAGS) -race -coverprofile=$(OUTPUT_DIR)/coverage.out -covermode=atomic ./...
 	$(GO) tool cover -html=$(OUTPUT_DIR)/coverage.out -o $(OUTPUT_DIR)/coverage.html
 	$(GO) tool cover -func=$(OUTPUT_DIR)/coverage.out
 	@echo ""
 	@echo "Coverage report generated: $(OUTPUT_DIR)/coverage.html"
+
+## mutation: Run gremlins mutation testing with 60% threshold
+mutation:
+	gremlins unleash --threshold 0.6
+
+## mutation-html: Run gremlins mutation testing with HTML output
+mutation-html:
+	@mkdir -p $(OUTPUT_DIR)
+	gremlins unleash --threshold 0.6 --output html --output-file $(OUTPUT_DIR)/mutation.html
+	@echo ""
+	@echo "Mutation report generated: $(OUTPUT_DIR)/mutation.html"
