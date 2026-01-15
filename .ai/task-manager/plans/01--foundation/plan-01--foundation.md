@@ -146,12 +146,33 @@ replica/
 
 **Deliverables**:
 - SessionStart script at `.claude/scripts/session_start.sh` (*per clarification*)
+- Claude Code settings at `.claude/settings.json` to configure the session start hook
 - Installation of Go 1.25 toolchain (*per clarification: Go 1.25 is current stable*)
 - Installation and configuration of pre-commit with golangci-lint, gofmt, and conventional commits hooks (*per clarification*)
 - `.pre-commit-config.yaml` configuration file for the repository
 - Documentation of system-level tool requirements
 - Script should be idempotent (safe to run multiple times)
 - Script should be kept updated as new system-level tools are required
+
+**Claude Code Settings Configuration**:
+```json
+// .claude/settings.json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/scripts/session_start.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
 
 **System-Level Tools**:
 - Go 1.25 (required for all development, installed via official Go binaries)
@@ -188,6 +209,7 @@ repos:
 ```
 
 **Acceptance Criteria**:
+- [ ] `.claude/settings.json` exists and configures the SessionStart hook
 - [ ] SessionStart script at `.claude/scripts/session_start.sh` executes without errors on fresh Debian/Ubuntu environment
 - [ ] Go 1.25 toolchain is properly installed and accessible via `go version`
 - [ ] pre-commit is installed and hooks are configured
@@ -470,6 +492,7 @@ This release has no external dependencies - it is the foundation.
 - **2026-01-15**: Updated Renovate config: removed schedule, enabled auto-merge for all update types including major
 - **2026-01-15**: Plan refinement session - Added coverage reporting tool clarification (go test -coverprofile); confirmed conventional-pre-commit as commit hook (removed commitlint ambiguity); added goreleaser-cross to Renovate custom managers; fixed task count in changelog (17 tasks: 00-16)
 - **2026-01-15**: Task files regenerated (17 tasks: 00-16) with detailed implementation notes; complexity analysis performed (all tasks ≤5); task IDs and dependencies aligned with execution blueprint
+- **2026-01-15**: Updated Task 00 to include `.claude/settings.json` configuration for SessionStart hook
 
 ## Task Dependency Visualization
 
