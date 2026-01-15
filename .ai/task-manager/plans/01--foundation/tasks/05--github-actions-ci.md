@@ -24,6 +24,7 @@ Create GitHub Actions workflow for continuous integration: lint, test, build, an
 - [ ] Build job produces binary artifacts
 - [ ] Docker image published to ghcr.io on releases
 - [ ] Jobs run in parallel where possible
+- [ ] Renovate config validation job runs `npx renovate-config-validator --strict`
 
 Use your internal Todo tool to track these and keep on track.
 
@@ -59,6 +60,15 @@ Use your internal Todo tool to track these and keep on track.
      IMAGE_NAME: ${{ github.repository }}
 
    jobs:
+     validate-renovate:
+       name: Validate Renovate Config
+       runs-on: ubuntu-latest
+       steps:
+         - uses: actions/checkout@v4
+
+         - name: Validate Renovate config
+           run: npx --yes --package renovate -- renovate-config-validator --strict
+
      lint:
        name: Lint
        runs-on: ubuntu-latest

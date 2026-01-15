@@ -24,6 +24,7 @@ Create a SessionStart script that automatically installs and configures required
 - [ ] golangci-lint pre-commit hook runs on staged Go files
 - [ ] gofmt pre-commit hook runs on staged Go files
 - [ ] Conventional commit message hook validates commit messages
+- [ ] Renovate config validator pre-commit hook validates `renovate.json`
 - [ ] Script is idempotent (running twice produces same result)
 - [ ] Script documents what it installs and why
 
@@ -178,6 +179,13 @@ repos:
       - id: conventional-pre-commit
         stages: [commit-msg]
         args: [--strict]
+
+  # Renovate config validation
+  - repo: https://github.com/renovatebot/pre-commit-hooks
+    rev: 39.94.0
+    hooks:
+      - id: renovate-config-validator
+        args: ['--strict']
 ```
 
 ### 4. Make Script Executable

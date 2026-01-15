@@ -23,6 +23,8 @@ Initialize the Go module and establish the directory structure following Go conv
 - [ ] LICENSE file (AGPL-3.0) added
 - [ ] Basic `.gitignore` for Go projects
 - [ ] `go.mod` and `go.sum` committed
+- [ ] `renovate.json` configured with auto-merge after 3 days and custom managers
+- [ ] `renovate.json` validates with `npx renovate-config-validator --strict`
 
 Use your internal Todo tool to track these and keep on track.
 
@@ -36,6 +38,7 @@ Use your internal Todo tool to track these and keep on track.
 
 ## Output Artifacts
 - `go.mod` file
+- `renovate.json` - Renovate configuration with auto-merge and custom managers
 - Directory structure:
   ```
   replica/
@@ -49,7 +52,8 @@ Use your internal Todo tool to track these and keep on track.
   │   │   ├── mysql/
   │   │   └── postgres/
   │   └── testutil/
-  └── LICENSE
+  ├── LICENSE
+  └── renovate.json
   ```
 
 ## Implementation Notes
@@ -119,6 +123,64 @@ Use your internal Todo tool to track these and keep on track.
    func main() {
        // Placeholder - will be implemented with Cobra CLI
    }
+   ```
+
+6. **Create Renovate Configuration** (`renovate.json`):
+   Create `renovate.json` with auto-merge after 3 days and custom managers for bash/curl dependencies:
+   ```json
+   {
+     "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+     "extends": ["config:recommended"],
+     "schedule": ["before 9am on monday"],
+     "packageRules": [
+       {
+         "matchUpdateTypes": ["minor", "patch"],
+         "automerge": true,
+         "minimumReleaseAge": "3 days"
+       }
+     ],
+     "customManagers": [
+       {
+         "customType": "regex",
+         "fileMatch": ["^\\.claude/scripts/session_start\\.sh$"],
+         "matchStrings": [
+           "GO_VERSION=\"(?<currentValue>\\d+\\.\\d+(\\.\\d+)?)\""
+         ],
+         "depNameTemplate": "golang",
+         "datasourceTemplate": "golang-version"
+       },
+       {
+         "customType": "regex",
+         "fileMatch": ["^\\.claude/scripts/session_start\\.sh$"],
+         "matchStrings": [
+           "GOLANGCI_LINT_VERSION=\"(?<currentValue>v\\d+\\.\\d+\\.\\d+)\""
+         ],
+         "depNameTemplate": "golangci/golangci-lint",
+         "datasourceTemplate": "github-releases"
+       },
+       {
+         "customType": "regex",
+         "fileMatch": ["^Dockerfile$"],
+         "matchStrings": [
+           "FROM\\s+(?<depName>[^:]+):(?<currentValue>[^\\s]+)"
+         ],
+         "datasourceTemplate": "docker"
+       },
+       {
+         "customType": "regex",
+         "fileMatch": ["^docker-compose\\.ya?ml$"],
+         "matchStrings": [
+           "image:\\s*(?<depName>[^:]+):(?<currentValue>[^\\s]+)"
+         ],
+         "datasourceTemplate": "docker"
+       }
+     ]
+   }
+   ```
+
+7. **Validate Renovate Configuration**:
+   ```bash
+   npx --yes --package renovate -- renovate-config-validator --strict
    ```
 
 </details>

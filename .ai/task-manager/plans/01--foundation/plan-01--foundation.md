@@ -36,6 +36,9 @@ created: 2025-12-19
 | SessionStart script location? | .claude/scripts/session_start.sh |
 | Pre-commit hooks to configure? | golangci-lint + gofmt + conventional commits |
 | Target development environment? | Debian/Ubuntu (apt-based) |
+| Dependency management automation? | Renovate with auto-merge after 3 days (all update types including major) |
+| Renovate config validation? | Pre-commit hook + CI job using `npx renovate-config-validator --strict` |
+| Renovate custom managers? | Yes, for all bash/curl installed dependencies (Go, golangci-lint, Docker images) |
 
 ## Executive Summary
 
@@ -175,6 +178,11 @@ repos:
     hooks:
       - id: conventional-pre-commit
         stages: [commit-msg]
+  # Renovate config validation (*per clarification*)
+  - repo: https://github.com/renovatebot/pre-commit-hooks
+    hooks:
+      - id: renovate-config-validator
+        args: ['--strict']
 ```
 
 **Acceptance Criteria**:
@@ -184,6 +192,7 @@ repos:
 - [ ] golangci-lint pre-commit hook runs on staged Go files
 - [ ] gofmt pre-commit hook runs on staged Go files
 - [ ] Conventional commit message hook validates commit messages
+- [ ] Renovate config validator pre-commit hook validates `renovate.json` (*per clarification*)
 - [ ] Script is idempotent (running twice produces same result)
 - [ ] Script documents what it installs and why
 
@@ -202,6 +211,50 @@ repos:
 - release-please configuration for automated changelog and releases
 - goreleaser configuration using goreleaser-cross for CGO cross-compilation (Linux/macOS/Windows)
 - Basic `replica version` command using Cobra CLI framework
+- Renovate configuration (`renovate.json`) with auto-merge after 3 days and custom managers (*per clarification*)
+
+**Renovate Configuration** (*per clarification*):
+```json
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
+  "packageRules": [
+    {
+      "matchUpdateTypes": ["major", "minor", "patch"],
+      "automerge": true,
+      "minimumReleaseAge": "3 days"
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "fileMatch": ["^\\.claude/scripts/session_start\\.sh$"],
+      "matchStrings": [
+        "GO_VERSION=\"(?<currentValue>\\d+\\.\\d+(\\.\\d+)?)\""
+      ],
+      "depNameTemplate": "golang",
+      "datasourceTemplate": "golang-version"
+    },
+    {
+      "customType": "regex",
+      "fileMatch": ["^\\.claude/scripts/session_start\\.sh$"],
+      "matchStrings": [
+        "GOLANGCI_LINT_VERSION=\"(?<currentValue>v\\d+\\.\\d+\\.\\d+)\""
+      ],
+      "depNameTemplate": "golangci/golangci-lint",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "fileMatch": ["^Dockerfile$"],
+      "matchStrings": [
+        "FROM\\s+(?<depName>[^:]+):(?<currentValue>[^\\s]+)"
+      ],
+      "datasourceTemplate": "docker"
+    }
+  ]
+}
+```
 
 **Acceptance Criteria**:
 - [ ] `make build` produces static binary for Linux/macOS/Windows
@@ -210,6 +263,8 @@ repos:
 - [ ] CI passes on all PRs
 - [ ] release-please creates releases from conventional commits
 - [ ] `replica version` outputs version information (using Cobra)
+- [ ] `renovate.json` validates with `npx renovate-config-validator --strict` (*per clarification*)
+- [ ] Renovate custom managers detect Go version, golangci-lint version, and Docker base images (*per clarification*)
 
 ### Task 02: Configuration System
 
@@ -358,6 +413,7 @@ This release has no external dependencies - it is the foundation.
 - cobra (CLI framework)
 - golangci-lint (linting)
 - gremlins (mutation testing)
+- renovate (dependency automation) (*per clarification*)
 - Database drivers using database/sql interface:
   - github.com/mattn/go-sqlite3 (SQLite, CGO required)
   - github.com/go-sql-driver/mysql (MariaDB/MySQL)
@@ -381,6 +437,9 @@ This release has no external dependencies - it is the foundation.
 - Docker image excludes libvips; it will be added in Release 0.4.0 (Asset Management)
 - *Per clarification*: PostgreSQL uses pgx/v5/stdlib instead of lib/pq for better performance and active maintenance
 - *Per clarification*: Mutation testing (gremlins) is fully integrated in CI, not just configured
+- *Per clarification*: Renovate configured for automated dependency updates with 3-day auto-merge delay for all update types (including major)
+- *Per clarification*: CI includes Renovate config validation job using `npx renovate-config-validator --strict`
+- *Per clarification*: Renovate custom managers track versions in `session_start.sh` (Go, golangci-lint) and Dockerfile base images
 
 ### Change Log
 
@@ -397,6 +456,8 @@ This release has no external dependencies - it is the foundation.
 - **2026-01-14**: Added Task 00: Development Environment Setup (SessionStart script for golang, pre-commit, system tools)
 - **2026-01-14**: Refined Task 00 with clarifications: script path (.claude/scripts/session_start.sh), pre-commit hooks (golangci-lint + gofmt + conventional commits), target environment (Debian/Ubuntu), added .pre-commit-config.yaml example and expanded acceptance criteria
 - **2026-01-14**: Task file 00--dev-environment-setup.md generated; updated Task 01 dependencies to include Task 00
+- **2026-01-15**: Added Renovate configuration requirements: auto-merge after 3 days, pre-commit hook validation, CI validation job, custom managers for bash/curl dependencies (Go, golangci-lint, Docker images)
+- **2026-01-15**: Updated Renovate config: removed schedule, enabled auto-merge for all update types including major
 
 ## Task Dependency Visualization
 
