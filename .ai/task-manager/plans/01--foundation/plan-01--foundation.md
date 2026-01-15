@@ -493,6 +493,7 @@ This release has no external dependencies - it is the foundation.
 - **2026-01-15**: Plan refinement session - Added coverage reporting tool clarification (go test -coverprofile); confirmed conventional-pre-commit as commit hook (removed commitlint ambiguity); added goreleaser-cross to Renovate custom managers; fixed task count in changelog (17 tasks: 00-16)
 - **2026-01-15**: Task files regenerated (17 tasks: 00-16) with detailed implementation notes; complexity analysis performed (all tasks ≤5); task IDs and dependencies aligned with execution blueprint
 - **2026-01-15**: Updated Task 00 to include `.claude/settings.json` configuration for SessionStart hook
+- **2026-01-15**: Updated all workflow references from `ubuntu-latest` to `ubuntu-24.04`; updated Alpine base image from 3.21 to 3.23
 
 ## Task Dependency Visualization
 
