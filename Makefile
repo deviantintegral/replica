@@ -27,7 +27,7 @@ DOCKER_TAG := $(VERSION)
 # Default target
 .DEFAULT_GOAL := help
 
-.PHONY: help all build test lint fmt docker clean coverage coverage-html mutation mutation-html
+.PHONY: help all build test lint fmt docker clean coverage coverage-html mutation mutation-html deps
 
 ## help: Show available targets
 help:
@@ -35,6 +35,11 @@ help:
 	@echo ""
 	@echo "Targets:"
 	@grep -E '^## ' $(MAKEFILE_LIST) | sed -e 's/^## /  /'
+
+## deps: Download and verify dependencies
+deps:
+	$(GO) mod download
+	$(GO) mod verify
 
 ## all: Build the binary (alias for build)
 all: build
