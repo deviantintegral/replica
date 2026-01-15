@@ -2,7 +2,7 @@
 id: 3
 group: "build-system"
 dependencies: [2]
-status: "pending"
+status: "completed"
 created: "2026-01-15"
 skills:
   - makefile

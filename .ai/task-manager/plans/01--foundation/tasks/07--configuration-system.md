@@ -2,7 +2,7 @@
 id: 7
 group: "configuration"
 dependencies: [2]
-status: "pending"
+status: "completed"
 created: "2026-01-15"
 skills:
   - go
