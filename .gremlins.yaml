@@ -1,0 +1,16 @@
+# gremlins mutation testing configuration
+timeout: 30s
+packages:
+  - ./internal/...
+exclude:
+  - ".*_test\\.go$"
+  - ".*/testutil/.*"
+  - ".*/migrations/.*"
+mutators:
+  - CONDITIONALS_BOUNDARY
+  - CONDITIONALS_NEGATION
+  - INCREMENT_DECREMENT
+  - INVERT_NEGATIVES
+  - ARITHMETIC_BASE
+threshold: 0.6
+output: text

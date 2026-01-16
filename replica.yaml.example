@@ -1,0 +1,47 @@
+# Replica Configuration File
+# Copy this file to replica.yaml and customize as needed.
+# Environment variables can override any setting using the REPLICA_ prefix.
+# For example: REPLICA_DATABASE_DRIVER=postgres
+
+# Instance identification
+instance:
+  # Name of this replica instance
+  # Override with: REPLICA_INSTANCE_NAME
+  name: "replica"
+
+# Database configuration
+database:
+  # Database driver: sqlite, mariadb, or postgres
+  # Override with: REPLICA_DATABASE_DRIVER
+  driver: sqlite
+
+  # Database connection URL
+  # For sqlite: path to database file (e.g., "replica.db")
+  # For mariadb: user:password@tcp(host:port)/dbname
+  # For postgres: postgres://user:password@host:port/dbname
+  # Override with: REPLICA_DATABASE_URL
+  url: "replica.db"
+
+# HTTP server configuration
+server:
+  # Host address to bind to
+  # Use "0.0.0.0" to listen on all interfaces
+  # Use "127.0.0.1" for localhost only
+  # Override with: REPLICA_SERVER_HOST
+  host: "0.0.0.0"
+
+  # Port to listen on (1-65535)
+  # Override with: REPLICA_SERVER_PORT
+  port: 8080
+
+# Logging configuration
+logging:
+  # Log level: debug, info, warn, or error
+  # Override with: REPLICA_LOGGING_LEVEL
+  level: info
+
+  # Log format: json or text
+  # json: structured JSON output (recommended for production)
+  # text: human-readable output (useful for development)
+  # Override with: REPLICA_LOGGING_FORMAT
+  format: json

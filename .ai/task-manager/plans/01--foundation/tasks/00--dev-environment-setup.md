@@ -2,7 +2,7 @@
 id: 0
 group: "dev-environment"
 dependencies: []
-status: "pending"
+status: "completed"
 created: "2026-01-15"
 skills:
   - bash
