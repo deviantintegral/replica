@@ -231,4 +231,6 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Validate Renovate configuration
-        run: npx --yes --package=renovate renovate-config-validator --strict
+        uses: deviantintegral/github-action-renovate-config-validator@322e333e6885127adce1185bf8a377a3fd053c66 # fix-renovate-version
+        with:
+          strict: true
